@@ -19,6 +19,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 button,
@@ -44,7 +45,7 @@ button:disabled {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-  background: linear-gradient(145deg, #fbf4f0 0%, #eef8e8 38%, #dceff7 72%, #d9e2fa 100%);
+  background: linear-gradient(145deg, #f6eee6 0%, #e1f1d7 34%, #bfe2ed 68%, #b9d4f4 100%);
 }
 
 .flow-canvas {
@@ -54,7 +55,7 @@ button:disabled {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  opacity: 0.98;
+  opacity: 1;
 }
 
 .ambient-stage::before {
@@ -64,9 +65,9 @@ button:disabled {
   content: "";
   pointer-events: none;
   background:
-    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.48), transparent 26%),
-    radial-gradient(circle at 78% 18%, rgba(255, 236, 215, 0.24), transparent 30%),
-    radial-gradient(circle at 58% 88%, rgba(177, 220, 255, 0.22), transparent 34%);
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.52), transparent 26%),
+    radial-gradient(circle at 78% 18%, rgba(255, 226, 198, 0.34), transparent 30%),
+    radial-gradient(circle at 58% 88%, rgba(137, 196, 246, 0.28), transparent 34%);
   filter: blur(calc(32px + var(--audio-level) * 18px));
   opacity: calc(0.44 + var(--audio-level) * 0.12);
   transform:
@@ -121,6 +122,42 @@ button:disabled {
   -webkit-backdrop-filter: blur(32px) saturate(1.32) brightness(1.03);
 }
 
+.revealable {
+  opacity: 0;
+  transform: translate3d(0, 34px, 0) scale(0.985);
+  filter: blur(10px);
+  transition:
+    opacity 720ms cubic-bezier(0.18, 0.86, 0.3, 1),
+    transform 720ms cubic-bezier(0.18, 0.86, 0.3, 1),
+    filter 720ms cubic-bezier(0.18, 0.86, 0.3, 1),
+    box-shadow 260ms ease,
+    border-color 260ms ease,
+    background 260ms ease;
+  animation: none !important;
+}
+
+.revealable.is-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  filter: blur(0);
+}
+
+.reveal-delay-0 {
+  transition-delay: 0ms;
+}
+
+.reveal-delay-1 {
+  transition-delay: 80ms;
+}
+
+.reveal-delay-2 {
+  transition-delay: 160ms;
+}
+
+.reveal-delay-3 {
+  transition-delay: 240ms;
+}
+
 .glass-surface::before {
   position: absolute;
   inset: 0;
@@ -170,6 +207,16 @@ button:disabled {
     0 14px 30px rgba(43, 67, 88, 0.11),
     inset 0 1px 0 rgba(255, 255, 255, 0.85);
   transform: translate3d(0, -4px, 0);
+}
+
+.liftable.revealable {
+  transition:
+    opacity 720ms cubic-bezier(0.18, 0.86, 0.3, 1),
+    transform 720ms cubic-bezier(0.18, 0.86, 0.3, 1),
+    filter 720ms cubic-bezier(0.18, 0.86, 0.3, 1),
+    box-shadow 260ms ease,
+    border-color 260ms ease,
+    background 260ms ease;
 }
 
 .minimal-nav.liftable:hover {
@@ -401,6 +448,9 @@ textarea:focus {
 }
 
 .metric {
+  --metric-a: rgba(96, 184, 215, 0.26);
+  --metric-b: rgba(119, 207, 163, 0.22);
+  --metric-c: rgba(255, 210, 157, 0.2);
   min-height: 112px;
   padding: 18px;
   animation: surface-enter 820ms cubic-bezier(0.18, 0.86, 0.3, 1) both;
@@ -408,18 +458,83 @@ textarea:focus {
 
 .metric:nth-child(1) {
   animation-delay: 430ms;
+  --metric-a: rgba(102, 187, 226, 0.3);
+  --metric-b: rgba(123, 217, 178, 0.24);
+  --metric-c: rgba(250, 215, 157, 0.18);
+  transition-delay: 40ms;
 }
 
 .metric:nth-child(2) {
   animation-delay: 510ms;
+  --metric-a: rgba(157, 203, 252, 0.28);
+  --metric-b: rgba(129, 224, 188, 0.22);
+  --metric-c: rgba(220, 182, 245, 0.18);
+  transition-delay: 100ms;
 }
 
 .metric:nth-child(3) {
   animation-delay: 590ms;
+  --metric-a: rgba(99, 194, 208, 0.28);
+  --metric-b: rgba(192, 223, 126, 0.2);
+  --metric-c: rgba(255, 196, 164, 0.18);
+  transition-delay: 160ms;
 }
 
 .metric:nth-child(4) {
   animation-delay: 670ms;
+  --metric-a: rgba(75, 165, 220, 0.26);
+  --metric-b: rgba(90, 210, 171, 0.24);
+  --metric-c: rgba(255, 216, 130, 0.2);
+  transition-delay: 220ms;
+}
+
+.metric.glass-surface {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.34)),
+    radial-gradient(circle at 20% 0%, var(--metric-c), transparent 46%),
+    radial-gradient(circle at 95% 90%, var(--metric-a), transparent 52%),
+    rgba(255, 255, 255, 0.42);
+}
+
+.metric.glass-surface::before {
+  background:
+    radial-gradient(circle at 18% 24%, var(--metric-a), transparent 32%),
+    radial-gradient(circle at 78% 16%, var(--metric-c), transparent 35%),
+    radial-gradient(circle at 72% 86%, var(--metric-b), transparent 42%);
+  opacity: 0.8;
+  transform: translate3d(-8%, -8%, 0) scale(1.18);
+  animation: metric-flow 9s ease-in-out infinite alternate;
+}
+
+.metric.glass-surface::after {
+  opacity: 0.2;
+}
+
+.metric-visual {
+  position: absolute;
+  right: -32px;
+  bottom: -36px;
+  z-index: 0 !important;
+  width: 172px;
+  height: 108px;
+  border-radius: 50%;
+  background:
+    repeating-linear-gradient(
+      120deg,
+      rgba(255, 255, 255, 0.28) 0 2px,
+      transparent 2px 10px
+    ),
+    radial-gradient(circle at 35% 35%, var(--metric-a), transparent 54%);
+  filter: blur(0.2px);
+  opacity: 0.78;
+  transform: rotate(-10deg);
+  animation: metric-orbit 7s ease-in-out infinite alternate;
+}
+
+.metric > span:not(.metric-visual),
+.metric > strong {
+  position: relative;
+  z-index: 2;
 }
 
 .metric span {
@@ -692,6 +807,24 @@ dd {
   }
 }
 
+@keyframes metric-flow {
+  from {
+    transform: translate3d(-10%, -8%, 0) scale(1.18) rotate(-2deg);
+  }
+  to {
+    transform: translate3d(8%, 7%, 0) scale(1.24) rotate(4deg);
+  }
+}
+
+@keyframes metric-orbit {
+  from {
+    transform: translate3d(-10px, 6px, 0) rotate(-12deg);
+  }
+  to {
+    transform: translate3d(8px, -7px, 0) rotate(8deg);
+  }
+}
+
 @keyframes soft-pulse {
   0%,
   100% {
@@ -705,6 +838,8 @@ dd {
 @media (prefers-reduced-motion: reduce) {
   .ambient-stage::before,
   .pulse-dot-on,
+  .metric.glass-surface::before,
+  .metric-visual,
   .minimal-nav,
   .hero-copy,
   .command-dock,

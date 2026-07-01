@@ -38,6 +38,21 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const revealItems = Array.from(document.querySelectorAll<HTMLElement>(".revealable"));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          entry.target.classList.toggle("is-visible", entry.isIntersecting);
+        });
+      },
+      { rootMargin: "-8% 0px -10% 0px", threshold: 0.16 },
+    );
+
+    revealItems.forEach((item) => observer.observe(item));
+    return () => observer.disconnect();
+  }, [activeRun, runs.length]);
+
+  useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
       if (!shellRef.current) {
         return;
@@ -75,12 +90,12 @@ export default function App() {
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const colorStops = [
-      { hue: 198, sat: 82, light: 82 },
-      { hue: 146, sat: 66, light: 85 },
-      { hue: 314, sat: 58, light: 88 },
-      { hue: 42, sat: 76, light: 88 },
-      { hue: 250, sat: 68, light: 90 },
-      { hue: 174, sat: 62, light: 84 },
+      { hue: 198, sat: 88, light: 74 },
+      { hue: 142, sat: 74, light: 78 },
+      { hue: 318, sat: 70, light: 82 },
+      { hue: 40, sat: 82, light: 80 },
+      { hue: 254, sat: 76, light: 83 },
+      { hue: 174, sat: 72, light: 76 },
     ];
 
     const resize = () => {
@@ -102,58 +117,79 @@ export default function App() {
 
       const audioLift = audioLevelRef.current;
       const base = context.createLinearGradient(0, 0, width, height);
-      base.addColorStop(0, "#fbf3f2");
-      base.addColorStop(0.32, "#edf8e8");
-      base.addColorStop(0.68, "#dff2f5");
-      base.addColorStop(1, "#d3e6fb");
+      base.addColorStop(0, "#f8eee8");
+      base.addColorStop(0.28, "#e8f4d7");
+      base.addColorStop(0.62, "#cfeaf2");
+      base.addColorStop(1, "#bdd8f4");
       context.globalCompositeOperation = "source-over";
       context.fillStyle = base;
       context.fillRect(0, 0, width, height);
 
-      context.globalCompositeOperation = "screen";
+      context.globalCompositeOperation = "source-over";
       colorStops.forEach((color, index) => {
-        const phase = t * (0.11 + index * 0.017) + index * 1.72 + pointer.scroll * 1.4;
-        const orbitX = Math.sin(phase * 1.13) * width * 0.19;
-        const orbitY = Math.cos(phase * 0.91) * height * 0.16;
+        const phase = t * (0.2 + index * 0.032) + index * 1.72 + pointer.scroll * 2.2;
+        const orbitX = Math.sin(phase * 1.13) * width * 0.25;
+        const orbitY = Math.cos(phase * 0.91) * height * 0.2;
         const x =
           width * (0.16 + index * 0.145) +
           orbitX +
-          pointer.x * (90 + index * 12) -
+          pointer.x * (160 + index * 18) -
           width * 0.09;
         const y =
           height * (0.22 + ((index * 0.19) % 0.62)) +
           orbitY +
-          pointer.y * (74 + index * 9) +
-          pointer.scroll * height * 0.18;
-        const radius = Math.max(width, height) * (0.32 + index * 0.018 + audioLift * 0.025);
+          pointer.y * (130 + index * 16) +
+          pointer.scroll * height * 0.24;
+        const radius = Math.max(width, height) * (0.34 + index * 0.022 + audioLift * 0.035);
         const gradient = context.createRadialGradient(x, y, 0, x, y, radius);
-        const hue = color.hue + Math.sin(t * 0.18 + index) * 8;
+        const hue = color.hue + Math.sin(t * 0.24 + index) * 14;
         gradient.addColorStop(
           0,
-          `hsla(${hue}, ${color.sat}%, ${color.light}%, ${0.5 + audioLift * 0.12})`,
+          `hsla(${hue}, ${color.sat}%, ${color.light}%, ${0.46 + audioLift * 0.14})`,
         );
-        gradient.addColorStop(0.48, `hsla(${hue}, ${color.sat}%, ${color.light}%, 0.22)`);
+        gradient.addColorStop(0.45, `hsla(${hue}, ${color.sat}%, ${color.light}%, 0.24)`);
         gradient.addColorStop(1, `hsla(${hue}, ${color.sat}%, ${color.light}%, 0)`);
         context.fillStyle = gradient;
         context.fillRect(0, 0, width, height);
       });
 
+      context.save();
+      context.globalCompositeOperation = "soft-light";
+      context.filter = "blur(18px)";
+      for (let band = 0; band < 4; band += 1) {
+        const hue = 174 + band * 28 + Math.sin(t * 0.18 + band) * 18;
+        const yBase = height * (0.2 + band * 0.18) + Math.sin(t * 0.26 + band) * height * 0.08;
+        context.beginPath();
+        context.moveTo(-width * 0.12, yBase + pointer.y * 44);
+        for (let x = -width * 0.12; x <= width * 1.12; x += width / 5) {
+          const wave =
+            Math.sin(x * 0.004 + t * (0.8 + band * 0.12) + band) * height * 0.08 +
+            Math.cos(x * 0.002 + t * 0.42 + band * 0.7) * height * 0.04;
+          context.lineTo(x + pointer.x * 90, yBase + wave + pointer.scroll * height * 0.15);
+        }
+        context.lineWidth = Math.max(90, height * 0.14);
+        context.lineCap = "round";
+        context.strokeStyle = `hsla(${hue}, 76%, 74%, ${0.11 + audioLift * 0.05})`;
+        context.stroke();
+      }
+      context.restore();
+
       context.globalCompositeOperation = "source-over";
-      context.lineWidth = 1;
+      context.lineWidth = 1.2;
       for (let row = -1; row < 9; row += 1) {
-        const y = height * (row / 8) + Math.sin(t * 0.24 + row) * 18 + pointer.y * 18;
+        const y = height * (row / 8) + Math.sin(t * 0.34 + row) * 24 + pointer.y * 24;
         context.beginPath();
         for (let x = -20; x <= width + 20; x += 22) {
           const wave =
-            Math.sin(x * 0.008 + t * 0.45 + row * 0.8) * (9 + audioLift * 6) +
-            Math.cos(x * 0.004 - t * 0.22 + row) * 7;
+            Math.sin(x * 0.008 + t * 0.72 + row * 0.8) * (12 + audioLift * 8) +
+            Math.cos(x * 0.004 - t * 0.34 + row) * 9;
           if (x === -20) {
             context.moveTo(x, y + wave);
           } else {
             context.lineTo(x, y + wave);
           }
         }
-        context.strokeStyle = `rgba(255, 255, 255, ${0.05 + row * 0.006})`;
+        context.strokeStyle = `rgba(255, 255, 255, ${0.09 + row * 0.009})`;
         context.stroke();
       }
 
@@ -274,7 +310,7 @@ export default function App() {
       <audio ref={audioRef} onEnded={() => setIsPlaying(false)} />
 
       <main className="app-shell">
-        <header className="minimal-nav glass-surface liftable">
+        <header className="minimal-nav glass-surface liftable revealable reveal-delay-0">
           <div>
             <p className="eyebrow">CareerPilot</p>
             <h1>Run Trace Studio</h1>
@@ -297,12 +333,12 @@ export default function App() {
         </header>
 
         <section className="hero-workspace">
-          <div className="hero-copy">
+          <div className="hero-copy revealable reveal-delay-1">
             <p className="eyebrow">我在听，CareerPilot</p>
             <h2>把每一次 Agent 运行，都留成清晰、可信、可复盘的轨迹。</h2>
           </div>
 
-          <div className="command-dock glass-surface liftable">
+          <div className="command-dock glass-surface liftable revealable reveal-delay-2">
             <textarea
               aria-label="Run goal"
               value={goal}
@@ -315,11 +351,11 @@ export default function App() {
             </button>
           </div>
 
-          <div className="music-line" title={audioName}>
+          <div className="music-line revealable reveal-delay-3" title={audioName}>
             <span className={isPlaying ? "pulse-dot pulse-dot-on" : "pulse-dot"} />
             <span>{audioName}</span>
           </div>
-          {error ? <p className="error-text glass-surface">{error}</p> : null}
+          {error ? <p className="error-text glass-surface revealable">{error}</p> : null}
         </section>
 
         <section className="insight-strip">
@@ -332,14 +368,14 @@ export default function App() {
         {activeRun ? (
           <RunTrace detail={activeRun} />
         ) : (
-          <section className="empty-state glass-surface liftable">
+          <section className="empty-state glass-surface liftable revealable">
             <p className="eyebrow">Trace</p>
             <h2>Ready for the first run</h2>
             <p>Planner output, checkpoints, events, tokens, latency, and cost will appear here.</p>
           </section>
         )}
 
-        <section className="run-list glass-surface liftable">
+        <section className="run-list glass-surface liftable revealable">
           <div className="section-heading">
             <div>
               <p className="eyebrow">History</p>
@@ -351,7 +387,7 @@ export default function App() {
           </div>
           <div className="run-table">
             {runs.map((run) => (
-              <div className="run-row liftable" key={run.run_id}>
+              <div className="run-row liftable revealable" key={run.run_id}>
                 <span>{run.run_id}</span>
                 <strong>{run.state}</strong>
                 <span>{run.step_count} steps</span>
@@ -367,7 +403,8 @@ export default function App() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="metric glass-surface liftable">
+    <div className="metric glass-surface liftable revealable">
+      <span className="metric-visual" aria-hidden="true" />
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
