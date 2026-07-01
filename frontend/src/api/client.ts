@@ -3,12 +3,13 @@ import type { RunDetail, RunSummary } from "../types";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const { headers, ...requestInit } = init ?? {};
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...requestInit,
     headers: {
       "Content-Type": "application/json",
-      ...init?.headers
-    },
-    ...init
+      ...headers
+    }
   });
 
   if (!response.ok) {
