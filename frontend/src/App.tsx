@@ -16,11 +16,15 @@ export default function App() {
   const [audioName, setAudioName] = useState("No track");
   const [isPlaying, setIsPlaying] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const flowCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const frameRef = useRef<number | null>(null);
+  const audioFrameRef = useRef<number | null>(null);
+  const backgroundFrameRef = useRef<number | null>(null);
+  const audioLevelRef = useRef(0);
+  const pointerRef = useRef({ x: 0, y: 0, targetX: 0, targetY: 0, scroll: 0 });
 
   async function refreshRuns() {
     const data = await listRuns();
@@ -40,18 +44,140 @@ export default function App() {
       }
       const x = event.clientX / window.innerWidth - 0.5;
       const y = event.clientY / window.innerHeight - 0.5;
+      pointerRef.current.targetX = x;
+      pointerRef.current.targetY = y;
       shellRef.current.style.setProperty("--mouse-x", x.toFixed(3));
       shellRef.current.style.setProperty("--mouse-y", y.toFixed(3));
     };
 
+    const handleScroll = () => {
+      const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
+      const scroll = window.scrollY / maxScroll;
+      pointerRef.current.scroll = scroll;
+      shellRef.current?.style.setProperty("--scroll-ratio", scroll.toFixed(3));
+    };
+
     window.addEventListener("pointermove", handlePointerMove);
-    return () => window.removeEventListener("pointermove", handlePointerMove);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = flowCanvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) {
+      return;
+    }
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const colorStops = [
+      { hue: 198, sat: 82, light: 82 },
+      { hue: 146, sat: 66, light: 85 },
+      { hue: 314, sat: 58, light: 88 },
+      { hue: 42, sat: 76, light: 88 },
+      { hue: 250, sat: 68, light: 90 },
+      { hue: 174, sat: 62, light: 84 },
+    ];
+
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
+      canvas.style.width = `${window.innerWidth}px`;
+      canvas.style.height = `${window.innerHeight}px`;
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+
+    const draw = (now: number) => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const t = now / 1000;
+      const pointer = pointerRef.current;
+      pointer.x += (pointer.targetX - pointer.x) * 0.045;
+      pointer.y += (pointer.targetY - pointer.y) * 0.045;
+
+      const audioLift = audioLevelRef.current;
+      const base = context.createLinearGradient(0, 0, width, height);
+      base.addColorStop(0, "#fbf3f2");
+      base.addColorStop(0.32, "#edf8e8");
+      base.addColorStop(0.68, "#dff2f5");
+      base.addColorStop(1, "#d3e6fb");
+      context.globalCompositeOperation = "source-over";
+      context.fillStyle = base;
+      context.fillRect(0, 0, width, height);
+
+      context.globalCompositeOperation = "screen";
+      colorStops.forEach((color, index) => {
+        const phase = t * (0.11 + index * 0.017) + index * 1.72 + pointer.scroll * 1.4;
+        const orbitX = Math.sin(phase * 1.13) * width * 0.19;
+        const orbitY = Math.cos(phase * 0.91) * height * 0.16;
+        const x =
+          width * (0.16 + index * 0.145) +
+          orbitX +
+          pointer.x * (90 + index * 12) -
+          width * 0.09;
+        const y =
+          height * (0.22 + ((index * 0.19) % 0.62)) +
+          orbitY +
+          pointer.y * (74 + index * 9) +
+          pointer.scroll * height * 0.18;
+        const radius = Math.max(width, height) * (0.32 + index * 0.018 + audioLift * 0.025);
+        const gradient = context.createRadialGradient(x, y, 0, x, y, radius);
+        const hue = color.hue + Math.sin(t * 0.18 + index) * 8;
+        gradient.addColorStop(
+          0,
+          `hsla(${hue}, ${color.sat}%, ${color.light}%, ${0.5 + audioLift * 0.12})`,
+        );
+        gradient.addColorStop(0.48, `hsla(${hue}, ${color.sat}%, ${color.light}%, 0.22)`);
+        gradient.addColorStop(1, `hsla(${hue}, ${color.sat}%, ${color.light}%, 0)`);
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, width, height);
+      });
+
+      context.globalCompositeOperation = "source-over";
+      context.lineWidth = 1;
+      for (let row = -1; row < 9; row += 1) {
+        const y = height * (row / 8) + Math.sin(t * 0.24 + row) * 18 + pointer.y * 18;
+        context.beginPath();
+        for (let x = -20; x <= width + 20; x += 22) {
+          const wave =
+            Math.sin(x * 0.008 + t * 0.45 + row * 0.8) * (9 + audioLift * 6) +
+            Math.cos(x * 0.004 - t * 0.22 + row) * 7;
+          if (x === -20) {
+            context.moveTo(x, y + wave);
+          } else {
+            context.lineTo(x, y + wave);
+          }
+        }
+        context.strokeStyle = `rgba(255, 255, 255, ${0.05 + row * 0.006})`;
+        context.stroke();
+      }
+
+      if (!reducedMotion) {
+        backgroundFrameRef.current = requestAnimationFrame(draw);
+      }
+    };
+
+    resize();
+    window.addEventListener("resize", resize);
+    backgroundFrameRef.current = requestAnimationFrame(draw);
+
+    return () => {
+      window.removeEventListener("resize", resize);
+      if (backgroundFrameRef.current) {
+        cancelAnimationFrame(backgroundFrameRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
     return () => {
-      if (frameRef.current) {
-        cancelAnimationFrame(frameRef.current);
+      if (audioFrameRef.current) {
+        cancelAnimationFrame(audioFrameRef.current);
       }
       audioContextRef.current?.close();
     };
@@ -108,6 +234,8 @@ export default function App() {
     } else {
       audio.pause();
       setIsPlaying(false);
+      audioLevelRef.current = 0;
+      shellRef.current?.style.setProperty("--audio-level", "0");
     }
   }
 
@@ -117,13 +245,18 @@ export default function App() {
       return;
     }
 
+    if (audioFrameRef.current) {
+      cancelAnimationFrame(audioFrameRef.current);
+    }
+
     const samples = new Uint8Array(analyser.frequencyBinCount);
     const tick = () => {
       analyser.getByteFrequencyData(samples);
       const average = samples.reduce((sum, sample) => sum + sample, 0) / samples.length;
       const level = Math.min(1, average / 160);
+      audioLevelRef.current = level;
       shellRef.current?.style.setProperty("--audio-level", level.toFixed(3));
-      frameRef.current = requestAnimationFrame(tick);
+      audioFrameRef.current = requestAnimationFrame(tick);
     };
     tick();
   }
@@ -136,6 +269,7 @@ export default function App() {
 
   return (
     <div className="ambient-stage" ref={shellRef}>
+      <canvas className="flow-canvas" ref={flowCanvasRef} aria-hidden="true" />
       <div className="ambient-noise" />
       <audio ref={audioRef} onEnded={() => setIsPlaying(false)} />
 
