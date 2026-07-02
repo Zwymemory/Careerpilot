@@ -310,25 +310,31 @@ export default function App() {
       <audio ref={audioRef} onEnded={() => setIsPlaying(false)} />
 
       <main className="app-shell">
-        <header className="minimal-nav glass-surface liftable revealable reveal-delay-0">
-          <div>
-            <p className="eyebrow">CareerPilot</p>
-            <h1>Run Trace Studio</h1>
+        <header className="minimal-nav glass-surface liftable revealable reveal-delay-0" tabIndex={0} aria-label="Music dock">
+          <div className="nav-collapsed" aria-hidden="true">
+            <span className={isPlaying ? "nav-orb nav-orb-on" : "nav-orb"}>♪</span>
           </div>
-          <div className="nav-actions">
-            <label className="icon-pill liftable" title="Choose local audio">
-              <span aria-hidden="true">♪</span>
-              <input type="file" accept="audio/*" onChange={handleAudioChange} />
-            </label>
-            <button
-              className="icon-pill liftable"
-              type="button"
-              onClick={toggleAudio}
-              disabled={audioName === "No track"}
-              title={isPlaying ? "Pause audio" : "Play audio"}
-            >
-              {isPlaying ? "Ⅱ" : "▶"}
-            </button>
+          <div className="nav-expanded">
+            <div className="nav-title">
+              <p className="eyebrow">Music Dock</p>
+              <h1>Run Trace Studio</h1>
+              <p className="nav-track">{audioName}</p>
+            </div>
+            <div className="nav-actions">
+              <label className="icon-pill liftable" title="Choose local audio">
+                <span aria-hidden="true">♪</span>
+                <input type="file" accept="audio/*" onChange={handleAudioChange} />
+              </label>
+              <button
+                className="icon-pill liftable"
+                type="button"
+                onClick={toggleAudio}
+                disabled={audioName === "No track"}
+                title={isPlaying ? "Pause audio" : "Play audio"}
+              >
+                {isPlaying ? "Ⅱ" : "▶"}
+              </button>
+            </div>
           </div>
         </header>
 
@@ -351,10 +357,6 @@ export default function App() {
             </button>
           </div>
 
-          <div className="music-line revealable reveal-delay-3" title={audioName}>
-            <span className={isPlaying ? "pulse-dot pulse-dot-on" : "pulse-dot"} />
-            <span>{audioName}</span>
-          </div>
           {error ? <p className="error-text glass-surface revealable">{error}</p> : null}
         </section>
 
