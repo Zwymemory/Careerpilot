@@ -5,7 +5,7 @@ import { RunTrace } from "./components/RunTrace";
 import type { RunDetail, RunSummary } from "./types";
 
 const defaultGoal =
-  "为 AI Agent 实习岗位生成 Week1 可追踪运行计划，保留人工审批点和成本记录。";
+  "为 AI Agent 实习岗位生成可追踪运行计划，保留人工审批点和成本记录。";
 
 export default function App() {
   const [goal, setGoal] = useState(defaultGoal);
@@ -434,7 +434,7 @@ export default function App() {
         <section className="hero-workspace">
           <div className="hero-copy revealable reveal-once reveal-delay-1" ref={heroCopyRef}>
             <p className="eyebrow">我在听，CareerPilot</p>
-            <h2>把每一次 Agent 运行，都留成清晰、可信、可复盘的轨迹。</h2>
+            <h2>Agent の 轨迹。</h2>
           </div>
 
           <div className="command-dock glass-surface liftable revealable reveal-delay-2">
