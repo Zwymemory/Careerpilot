@@ -18,6 +18,7 @@ export default function App() {
   const [isMusicDockOpen, setIsMusicDockOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const musicDockRef = useRef<HTMLElement | null>(null);
+  const musicDockPointerInsideRef = useRef(false);
   const heroCopyRef = useRef<HTMLDivElement | null>(null);
   const goalInputRef = useRef<HTMLTextAreaElement | null>(null);
   const flowCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -292,6 +293,7 @@ export default function App() {
     audioRef.current.src = URL.createObjectURL(file);
     setAudioName(file.name.replace(/\.[^.]+$/, ""));
     setIsPlaying(false);
+    setIsMusicDockOpen(true);
   }
 
   async function toggleAudio() {
@@ -367,12 +369,32 @@ export default function App() {
             isMusicDockOpen ? "dock-open" : "dock-closed"
           }`}
           aria-label="Music dock"
+          onPointerDownCapture={() => {
+            musicDockPointerInsideRef.current = true;
+          }}
+          onPointerUpCapture={() => {
+            window.setTimeout(() => {
+              musicDockPointerInsideRef.current = false;
+            }, 350);
+          }}
           onBlur={(event) => {
+            const currentTarget = event.currentTarget;
             const nextTarget = event.relatedTarget;
-            if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+            if (nextTarget instanceof Node && currentTarget.contains(nextTarget)) {
               return;
             }
-            setIsMusicDockOpen(false);
+
+            const pointerStartedInside = musicDockPointerInsideRef.current;
+            window.setTimeout(() => {
+              if (pointerStartedInside) {
+                musicDockPointerInsideRef.current = false;
+                return;
+              }
+              if (currentTarget.contains(document.activeElement)) {
+                return;
+              }
+              setIsMusicDockOpen(false);
+            }, 0);
           }}
         >
           <button

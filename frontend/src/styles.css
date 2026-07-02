@@ -596,9 +596,9 @@ h3 {
   border-radius: 34px;
   border-color: rgba(255, 255, 255, 0.7);
   background:
-    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.72), transparent 38%),
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.58), transparent 36%),
     radial-gradient(circle at 95% 82%, rgba(105, 196, 211, 0.2), transparent 46%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.22)),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.22)),
     rgba(255, 255, 255, 0.24);
   box-shadow:
     0 24px 66px rgba(48, 90, 118, 0.1),
@@ -612,9 +612,9 @@ h3 {
 
 .command-dock.glass-surface::before {
   background:
-    linear-gradient(100deg, rgba(255, 255, 255, 0.7), transparent 42%),
-    radial-gradient(circle at 82% 18%, rgba(255, 255, 255, 0.36), transparent 28%);
-  opacity: 0.62;
+    linear-gradient(100deg, rgba(255, 255, 255, 0.58), transparent 42%),
+    radial-gradient(circle at 82% 18%, rgba(255, 255, 255, 0.34), transparent 28%);
+  opacity: 0.54;
 }
 
 .command-dock.glass-surface::after {
@@ -675,9 +675,14 @@ h3 {
   color: #10293a;
   background: transparent;
   box-shadow: none;
-  font-size: 31px;
+  font-size: 30px;
   font-weight: 310;
   line-height: 1;
+}
+
+.composer-icon span {
+  display: block;
+  transform: translateY(-2px);
 }
 
 .composer-icon:hover {
