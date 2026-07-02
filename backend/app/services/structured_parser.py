@@ -1,10 +1,12 @@
+import json
 import re
 from dataclasses import dataclass
+from typing import Protocol
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import Settings
-from app.schemas.llm import ChatMessage, LLMRequest
+from app.schemas.llm import ChatMessage, LLMRequest, LLMResponse
 from app.schemas.parser import (
     EvidenceItem,
     JobProfile,
@@ -64,6 +66,11 @@ HIDDEN_KEYWORD_HINTS = [
 COMPANY_CONTEXT_HINTS = ["About", "Company", "团队", "业务", "公司"]
 
 
+class ChatClient(Protocol):
+    async def chat(self, request: LLMRequest) -> LLMResponse:
+        pass
+
+
 @dataclass(frozen=True)
 class ResumeParseResult:
     profile: ResumeProfile
@@ -79,9 +86,9 @@ class JobParseResult:
 
 
 class StructuredParserService:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, llm_client: ChatClient | None = None) -> None:
         self.settings = settings
-        self.llm_client = LLMClient(settings)
+        self.llm_client = llm_client or LLMClient(settings)
 
     async def parse_resume(self, text: str) -> ResumeParseResult:
         if self.settings.llm_dry_run or not self.settings.llm_api_key:
@@ -92,10 +99,13 @@ class StructuredParserService:
                 messages=[
                     ChatMessage(
                         role="system",
-                        content=(
-                            "You are CareerPilot ResumeParserAgent. Return only a JSON object "
-                            "matching the ResumeProfile schema. Separate factual fields, inferred "
-                            "fields, and needs_confirmation. Never invent resume facts."
+                        content=_structured_system_prompt(
+                            agent_name="ResumeParserAgent",
+                            model=ResumeProfile,
+                            task=(
+                                "Parse resume text into education, skills, projects, experiences, "
+                                "keywords, evidence, inferred_fields, and needs_confirmation."
+                            ),
                         ),
                     ),
                     ChatMessage(role="user", content=text),
@@ -155,11 +165,15 @@ class StructuredParserService:
                 messages=[
                     ChatMessage(
                         role="system",
-                        content=(
-                            "You are CareerPilot JobIntelAgent. Return only a JSON object matching "
-                            "the JobProfile schema. Separate hard_requirements, nice_to_have, "
-                            "hidden_keywords, responsibilities, and company_context. Do not invent "
-                            "company or role facts."
+                        content=_structured_system_prompt(
+                            agent_name="JobIntelAgent",
+                            model=JobProfile,
+                            task=(
+                                "Parse JD text into company, title, hard_requirements, "
+                                "nice_to_have, responsibilities, tech_keywords, hidden_keywords, "
+                                "company_context, "
+                                "evidence, inferred_fields, and needs_confirmation."
+                            ),
                         ),
                     ),
                     ChatMessage(role="user", content=text),
@@ -364,6 +378,28 @@ def _cost_from_response(response) -> CostUsage:
         total_tokens=response.usage.total_tokens,
         latency_ms=response.latency_ms,
         estimated_cost_cny=response.estimated_cost_cny,
+    )
+
+
+def _structured_system_prompt(
+    agent_name: str,
+    model: type[BaseModel],
+    task: str,
+) -> str:
+    schema = json.dumps(model.model_json_schema(), ensure_ascii=False)
+    return (
+        f"You are CareerPilot {agent_name}.\n"
+        f"Task: {task}\n"
+        "Return exactly one JSON object and no markdown, no code fence, no commentary.\n"
+        "The JSON object must validate against this Pydantic JSON schema:\n"
+        f"{schema}\n"
+        "Rules:\n"
+        "- Never invent education, company, dates, metrics, skills, awards, or outcomes.\n"
+        "- Put direct facts only when the source text supports them.\n"
+        "- Put uncertain or inferred fields into inferred_fields and needs_confirmation.\n"
+        "- evidence.source_text must be an exact short excerpt from the source text.\n"
+        "- Use [] for unknown arrays and null for unknown optional scalar fields.\n"
+        "- Keep every item concise enough for later matching and resume rewriting.\n"
     )
 
 

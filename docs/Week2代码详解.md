@@ -460,6 +460,39 @@ Embedding API 或本地 embedding：
 
 目前最建议你先准备：DeepSeek API key。等你给我 key 或告诉我 `.env` 已配置好，我会把 W2 parser 切到真实 LLM structured output，并保留 dry-run/fallback。
 
+## DeepSeek 真实模型验证
+
+`.env` 已被 `.gitignore` 忽略，API key 只应该放在本地 `backend/.env`，不要提交到 Git。
+
+把以下配置写入 `backend/.env`：
+
+```env
+LLM_DRY_RUN=false
+LLM_PROVIDER=deepseek
+LLM_MODEL=deepseek-chat
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_API_KEY=你的 DeepSeek key
+```
+
+然后重启后端：
+
+```bash
+cd backend
+source .venv/bin/activate
+uvicorn app.main:app --reload
+```
+
+再执行 parser curl。真实模型路径的预期变化：
+
+- `metadata.source` 从 `heuristic_dry_run` 变为 `llm_structured_output`；
+- `metadata.model` 变为 `deepseek-chat`；
+- `metadata.dry_run` 变为 `false`；
+- `run` 里会记录 token 和成本；
+- 如果 DeepSeek 返回的 JSON 有 code fence、尾逗号或前后解释文字，`json_repaired` 可能为 `true`；
+- 如果模型输出不符合 schema，会回退到 `heuristic_fallback`，并在 `metadata.issues` 记录原因。
+
+这一步完成后，W2 才算从“可本地演示”升级为“真实模型解析可用”。之后再进入 W3 LoopEngine 会更稳。
+
 ## 面试讲法
 
 我没有直接把 LLM 输出传给业务层，而是设计了三层保护：

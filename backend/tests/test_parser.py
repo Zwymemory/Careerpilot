@@ -1,11 +1,32 @@
+import anyio
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings
 from app.main import app
+from app.schemas.llm import LLMResponse, LLMUsage
 from app.schemas.run import RunState
 from app.services.json_repair import repair_json_object
 from app.services.run_store import run_store
+from app.services.structured_parser import StructuredParserService
 
 client = TestClient(app)
+
+
+class FakeLLMClient:
+    def __init__(self, content: str) -> None:
+        self.content = content
+        self.last_system_prompt: str | None = None
+
+    async def chat(self, request):
+        self.last_system_prompt = request.messages[0].content
+        return LLMResponse(
+            provider="fake",
+            model="fake-structured-model",
+            content=self.content,
+            usage=LLMUsage(prompt_tokens=100, completion_tokens=60, total_tokens=160),
+            latency_ms=12,
+            estimated_cost_cny=0.001,
+        )
 
 
 def test_json_repair_handles_markdown_fence_and_trailing_comma() -> None:
@@ -80,3 +101,47 @@ def test_parse_job_returns_requirements_and_trace() -> None:
     assert run.state == RunState.COMPLETED
     assert run.steps[0].name == "parse_job"
     assert run.steps[0].agent_name == "JobIntelAgent"
+
+
+def test_resume_parser_accepts_llm_structured_output_with_repair() -> None:
+    fake_client = FakeLLMClient(
+        """
+        ```json
+        {
+          "skills": ["Python", "FastAPI"],
+          "projects": [
+            {
+              "name": "CareerPilot",
+              "description": "CareerPilot built a traceable Agent workflow.",
+              "skills": ["Python", "FastAPI"],
+              "evidence": [
+                {
+                  "field_path": "projects",
+                  "source_text": "CareerPilot built a traceable Agent workflow.",
+                  "confidence": 0.9,
+                  "is_inferred": false
+                }
+              ]
+            }
+          ],
+        }
+        ```
+        """
+    )
+    settings = Settings(llm_dry_run=False, llm_api_key="test-key")
+    service = StructuredParserService(settings, llm_client=fake_client)
+
+    result = anyio.run(
+        service.parse_resume,
+        "Project: CareerPilot built a traceable Agent workflow.",
+    )
+
+    assert result.metadata.source == "llm_structured_output"
+    assert result.metadata.json_repaired is True
+    assert result.metadata.model == "fake-structured-model"
+    assert result.cost_usage is not None
+    assert result.profile.skills == ["Python", "FastAPI"]
+    assert result.profile.projects[0].name == "CareerPilot"
+    assert fake_client.last_system_prompt is not None
+    assert "Pydantic JSON schema" in fake_client.last_system_prompt
+    assert "Never invent" in fake_client.last_system_prompt
