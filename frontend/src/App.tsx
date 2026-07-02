@@ -17,6 +17,7 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMusicDockOpen, setIsMusicDockOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const musicDockRef = useRef<HTMLElement | null>(null);
   const flowCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -81,6 +82,23 @@ export default function App() {
       window.removeEventListener("scroll", handleScroll);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isMusicDockOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && musicDockRef.current?.contains(target)) {
+        return;
+      }
+      setIsMusicDockOpen(false);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, { capture: true });
+    return () => window.removeEventListener("pointerdown", handlePointerDown, { capture: true });
+  }, [isMusicDockOpen]);
 
   useEffect(() => {
     const canvas = flowCanvasRef.current;
@@ -312,14 +330,23 @@ export default function App() {
 
       <main className="app-shell">
         <header
+          ref={musicDockRef}
           className={`minimal-nav glass-surface liftable ${
             isMusicDockOpen ? "dock-open" : "dock-closed"
           }`}
           aria-label="Music dock"
+          onBlur={(event) => {
+            const nextTarget = event.relatedTarget;
+            if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+              return;
+            }
+            setIsMusicDockOpen(false);
+          }}
         >
           <button
             className="nav-collapsed"
             type="button"
+            onFocus={() => setIsMusicDockOpen(true)}
             onClick={() => setIsMusicDockOpen(true)}
             aria-label="Open music dock"
             aria-expanded={isMusicDockOpen}
@@ -345,18 +372,6 @@ export default function App() {
                 title={isPlaying ? "Pause audio" : "Play audio"}
               >
                 {isPlaying ? "Ⅱ" : "▶"}
-              </button>
-              <button
-                className="icon-pill liftable dock-collapse-button"
-                type="button"
-                onClick={(event) => {
-                  event.currentTarget.blur();
-                  setIsMusicDockOpen(false);
-                }}
-                title="Send music dock to corner"
-                aria-label="Collapse music dock"
-              >
-                ↗
               </button>
             </div>
           </div>

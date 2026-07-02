@@ -263,7 +263,7 @@ button:disabled {
 }
 
 .minimal-nav {
-  --dock-corner-right: max(28px, calc((100vw - 1180px) / 2 + 20px));
+  --dock-corner-right: max(18px, calc((100vw - 1180px) / 2 - 84px));
   position: fixed;
   top: 22px;
   right: auto;
@@ -395,7 +395,7 @@ button:disabled {
   position: absolute;
   inset: 12px 14px 12px 20px;
   display: grid;
-  grid-template-columns: 144px minmax(0, 1fr) 144px;
+  grid-template-columns: 108px minmax(0, 1fr) 108px;
   align-items: center;
   opacity: 0;
   pointer-events: none;
@@ -457,10 +457,6 @@ button:disabled {
   align-items: center;
   justify-self: end;
   gap: 8px;
-}
-
-.dock-collapse-button {
-  color: rgba(30, 58, 78, 0.72);
 }
 
 .icon-pill,
@@ -560,12 +556,15 @@ h3 {
 
 .hero-workspace {
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
   justify-items: center;
-  min-height: 560px;
-  padding: 128px 0 96px;
+  min-height: calc(100vh - 118px);
+  padding: clamp(82px, 12vh, 132px) 0 clamp(42px, 6vh, 72px);
 }
 
 .hero-copy {
+  align-self: center;
   width: min(780px, 100%);
   text-align: center;
   animation: text-enter 840ms cubic-bezier(0.18, 0.86, 0.3, 1) 120ms both;
@@ -576,12 +575,13 @@ h3 {
 }
 
 .command-dock {
+  align-self: end;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
   gap: 14px;
   width: min(840px, 100%);
-  margin-top: 112px;
+  margin-top: clamp(76px, 10vh, 116px);
   padding: 12px;
   border-color: rgba(255, 255, 255, 0.62);
   background:
