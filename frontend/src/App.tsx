@@ -18,6 +18,7 @@ export default function App() {
   const [isMusicDockOpen, setIsMusicDockOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const musicDockRef = useRef<HTMLElement | null>(null);
+  const heroCopyRef = useRef<HTMLDivElement | null>(null);
   const flowCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -44,6 +45,12 @@ export default function App() {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
+          if (entry.target.classList.contains("reveal-once")) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+            }
+            return;
+          }
           entry.target.classList.toggle("is-visible", entry.isIntersecting);
         });
       },
@@ -72,6 +79,13 @@ export default function App() {
       const scroll = window.scrollY / maxScroll;
       pointerRef.current.scroll = scroll;
       shellRef.current?.style.setProperty("--scroll-ratio", scroll.toFixed(3));
+
+      const heroCopy = heroCopyRef.current;
+      if (heroCopy) {
+        const rect = heroCopy.getBoundingClientRect();
+        const opacity = Math.max(0, Math.min(1, (rect.bottom - 8) / 150));
+        heroCopy.style.setProperty("--hero-copy-opacity", opacity.toFixed(3));
+      }
     };
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -378,7 +392,7 @@ export default function App() {
         </header>
 
         <section className="hero-workspace">
-          <div className="hero-copy revealable reveal-delay-1">
+          <div className="hero-copy revealable reveal-once reveal-delay-1" ref={heroCopyRef}>
             <p className="eyebrow">我在听，CareerPilot</p>
             <h2>把每一次 Agent 运行，都留成清晰、可信、可复盘的轨迹。</h2>
           </div>
