@@ -46,6 +46,16 @@ export interface AgentEvent {
   created_at: string;
 }
 
+export interface AgentCheckpoint {
+  checkpoint_id: string;
+  run_id: string;
+  step_id: string | null;
+  name: string;
+  phase: string;
+  data: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface AgentRun {
   run_id: string;
   user_id: string;
@@ -56,6 +66,7 @@ export interface AgentRun {
   steps: AgentStep[];
   events: AgentEvent[];
   costs: CostUsage[];
+  checkpoints: AgentCheckpoint[];
   created_at: string;
   updated_at: string;
 }
@@ -77,4 +88,89 @@ export interface RunDetail {
   run: AgentRun;
   total_tokens: number;
   total_cost_cny: number;
+}
+
+export interface ParseIssue {
+  code: string;
+  message: string;
+  severity: "info" | "warning" | "error";
+  field_path: string | null;
+}
+
+export interface EvidenceItem {
+  field_path: string;
+  source_text: string;
+  confidence: number;
+  is_inferred: boolean;
+}
+
+export interface ResumeEducation {
+  school: string;
+  degree: string | null;
+  major: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  evidence: EvidenceItem[];
+}
+
+export interface ResumeProject {
+  name: string;
+  description: string;
+  skills: string[];
+  evidence: EvidenceItem[];
+}
+
+export interface ResumeExperience {
+  company: string | null;
+  title: string;
+  description: string;
+  start_date: string | null;
+  end_date: string | null;
+  evidence: EvidenceItem[];
+}
+
+export interface ResumeProfile {
+  education: ResumeEducation[];
+  skills: string[];
+  projects: ResumeProject[];
+  experiences: ResumeExperience[];
+  keywords: string[];
+  evidence: EvidenceItem[];
+  inferred_fields: string[];
+  needs_confirmation: string[];
+}
+
+export interface JobProfile {
+  company: string | null;
+  title: string | null;
+  hard_requirements: string[];
+  nice_to_have: string[];
+  responsibilities: string[];
+  tech_keywords: string[];
+  hidden_keywords: string[];
+  company_context: string[];
+  evidence: EvidenceItem[];
+  inferred_fields: string[];
+  needs_confirmation: string[];
+}
+
+export interface ParseMetadata {
+  parser: "resume" | "job";
+  source: "llm_structured_output" | "heuristic_dry_run" | "heuristic_fallback";
+  model: string | null;
+  dry_run: boolean;
+  json_repaired: boolean;
+  issues: ParseIssue[];
+}
+
+export interface ParseResumeResponse {
+  run_id: string;
+  profile: ResumeProfile;
+  metadata: ParseMetadata;
+}
+
+export interface ParseJobResponse {
+  run_id: string;
+  profile: JobProfile;
+  metadata: ParseMetadata;
 }

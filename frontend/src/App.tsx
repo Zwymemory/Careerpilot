@@ -1,16 +1,43 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { createRun, listRuns } from "./api/client";
+import {
+  approveLoopRun,
+  createLoopRun,
+  createRun,
+  getRun,
+  listRuns,
+  parseJob,
+  parseResume,
+  resumeLoopRun
+} from "./api/client";
 import { RunTrace } from "./components/RunTrace";
-import type { RunDetail, RunSummary } from "./types";
+import type { ParseJobResponse, ParseResumeResponse, RunDetail, RunSummary } from "./types";
 
 const defaultGoal =
   "为 AI Agent 实习岗位生成可追踪运行计划，保留人工审批点和成本记录。";
+const defaultResumeText =
+  "Education: Example University\nSkills: Python, FastAPI, React\nProject: CareerPilot built a traceable Agent workflow.";
+const defaultJobText =
+  "Company: Example AI\nTitle: AI Agent Backend Intern\nRequired: Python, FastAPI, SQL\nPreferred: React, TypeScript";
+
+type WorkflowAction =
+  | "resume-parser"
+  | "job-parser"
+  | "loop-run"
+  | "loop-approval"
+  | "loop-resume";
 
 export default function App() {
   const [goal, setGoal] = useState(defaultGoal);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [activeRun, setActiveRun] = useState<RunDetail | null>(null);
+  const [resumeText, setResumeText] = useState(defaultResumeText);
+  const [jobText, setJobText] = useState(defaultJobText);
+  const [resumeResult, setResumeResult] = useState<ParseResumeResponse | null>(null);
+  const [jobResult, setJobResult] = useState<ParseJobResponse | null>(null);
+  const [workflowAction, setWorkflowAction] = useState<WorkflowAction | null>(null);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
+  const [approvalNotes, setApprovalNotes] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [audioName, setAudioName] = useState("No track");
@@ -34,6 +61,11 @@ export default function App() {
   async function refreshRuns() {
     const data = await listRuns();
     setRuns(data);
+  }
+
+  async function showRun(runId: string) {
+    const detail = await getRun(runId);
+    setActiveRun(detail);
   }
 
   useLayoutEffect(() => {
@@ -285,6 +317,111 @@ export default function App() {
     }
   }
 
+  async function handleParseResume() {
+    const text = resumeText.trim();
+    if (text.length < 10 || workflowAction) {
+      setWorkflowError("Resume text needs at least 10 characters.");
+      return;
+    }
+
+    setWorkflowAction("resume-parser");
+    setWorkflowError(null);
+    try {
+      const result = await parseResume(text);
+      setResumeResult(result);
+      await showRun(result.run_id);
+      await refreshRuns();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "Resume parser failed.");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleParseJob() {
+    const text = jobText.trim();
+    if (text.length < 10 || workflowAction) {
+      setWorkflowError("Job description needs at least 10 characters.");
+      return;
+    }
+
+    setWorkflowAction("job-parser");
+    setWorkflowError(null);
+    try {
+      const result = await parseJob(text);
+      setJobResult(result);
+      await showRun(result.run_id);
+      await refreshRuns();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "Job parser failed.");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleCreateLoopRun() {
+    const runGoal = goal.trim();
+    const resume = resumeText.trim();
+    const job = jobText.trim();
+    if (!runGoal || (!resume && !job) || workflowAction) {
+      setWorkflowError("LoopEngine needs a goal and at least one resume/JD input.");
+      return;
+    }
+
+    setWorkflowAction("loop-run");
+    setWorkflowError(null);
+    try {
+      const detail = await createLoopRun({
+        goal: runGoal,
+        ...(resume ? { resume_text: resume } : {}),
+        ...(job ? { job_text: job } : {})
+      });
+      setActiveRun(detail);
+      await refreshRuns();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "LoopEngine run failed.");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleApproveLoopRun() {
+    if (!activeRun || workflowAction) {
+      return;
+    }
+
+    setWorkflowAction("loop-approval");
+    setWorkflowError(null);
+    try {
+      const detail = await approveLoopRun(activeRun.run.run_id, approvalNotes.trim());
+      setActiveRun(detail);
+      setApprovalNotes("");
+      await refreshRuns();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "Approval failed.");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleResumeLoopRun() {
+    if (!activeRun || workflowAction) {
+      return;
+    }
+
+    setWorkflowAction("loop-resume");
+    setWorkflowError(null);
+    try {
+      const detail = await resumeLoopRun(activeRun.run.run_id);
+      setActiveRun(detail);
+      await refreshRuns();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "Resume failed.");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
   function handleAudioChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || !audioRef.current) {
@@ -355,6 +492,10 @@ export default function App() {
   const latestState = latestRun?.state ?? latestSummary?.state ?? "IDLE";
   const latestTokens = activeRun?.total_tokens ?? latestSummary?.total_tokens ?? 0;
   const totalCost = activeRun?.total_cost_cny ?? runs[0]?.total_cost_cny ?? 0;
+  const activeCheckpoints = activeRun?.run.checkpoints.length ?? 0;
+  const activeStepCount = activeRun?.run.steps.length ?? latestSummary?.step_count ?? 0;
+  const canApproveActiveRun = activeRun?.run.state === "WAITING_APPROVAL";
+  const canResumeActiveRun = activeRun?.run.state === "FAILED";
 
   return (
     <div className="ambient-stage" ref={shellRef}>
@@ -485,6 +626,110 @@ export default function App() {
           <Metric label="Cost CNY" value={totalCost.toFixed(6)} />
         </section>
 
+        <section className="workflow-board">
+          <section className="workflow-panel glass-surface liftable revealable">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Week2 Parser</p>
+                <h2>Structured intake</h2>
+              </div>
+              <span className="state-badge">W2</span>
+            </div>
+            <div className="workflow-input-grid">
+              <label className="workflow-field">
+                <span>Resume</span>
+                <textarea
+                  value={resumeText}
+                  onChange={(event) => setResumeText(event.target.value)}
+                  rows={5}
+                />
+              </label>
+              <label className="workflow-field">
+                <span>Job description</span>
+                <textarea
+                  value={jobText}
+                  onChange={(event) => setJobText(event.target.value)}
+                  rows={5}
+                />
+              </label>
+            </div>
+            <div className="workflow-actions">
+              <button
+                className="ghost-action liftable"
+                type="button"
+                onClick={handleParseResume}
+                disabled={workflowAction !== null}
+              >
+                {workflowAction === "resume-parser" ? "Parsing" : "Parse resume"}
+              </button>
+              <button
+                className="ghost-action liftable"
+                type="button"
+                onClick={handleParseJob}
+                disabled={workflowAction !== null}
+              >
+                {workflowAction === "job-parser" ? "Parsing" : "Parse JD"}
+              </button>
+            </div>
+            <div className="parser-result-grid">
+              <ParserSummary kind="resume" result={resumeResult} />
+              <ParserSummary kind="job" result={jobResult} />
+            </div>
+          </section>
+
+          <section className="workflow-panel glass-surface liftable revealable reveal-delay-1">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Week3 LoopEngine</p>
+                <h2>Plan · Execute · Verify</h2>
+              </div>
+              <span className="state-badge">W3</span>
+            </div>
+            <div className="loop-stats">
+              <WorkflowStat label="Current" value={formatState(latestState)} />
+              <WorkflowStat label="Steps" value={activeStepCount.toString()} />
+              <WorkflowStat label="Checkpoints" value={activeCheckpoints.toString()} />
+            </div>
+            <label className="workflow-field workflow-field-compact">
+              <span>Approval notes</span>
+              <textarea
+                value={approvalNotes}
+                onChange={(event) => setApprovalNotes(event.target.value)}
+                rows={3}
+                placeholder="Approval note for the active LoopEngine run"
+              />
+            </label>
+            <div className="workflow-actions loop-actions">
+              <button
+                className="primary-action liftable"
+                type="button"
+                onClick={handleCreateLoopRun}
+                disabled={workflowAction !== null || (!resumeText.trim() && !jobText.trim())}
+              >
+                {workflowAction === "loop-run" ? "Running" : "Start loop"}
+              </button>
+              <button
+                className="ghost-action liftable"
+                type="button"
+                onClick={handleApproveLoopRun}
+                disabled={workflowAction !== null || !canApproveActiveRun}
+              >
+                {workflowAction === "loop-approval" ? "Approving" : "Approve"}
+              </button>
+              <button
+                className="ghost-action liftable"
+                type="button"
+                onClick={handleResumeLoopRun}
+                disabled={workflowAction !== null || !canResumeActiveRun}
+              >
+                {workflowAction === "loop-resume" ? "Resuming" : "Resume"}
+              </button>
+            </div>
+          </section>
+        </section>
+
+        {workflowError ? <p className="error-text glass-surface revealable">{workflowError}</p> : null}
+
         {activeRun ? (
           <RunTrace detail={activeRun} />
         ) : (
@@ -531,9 +776,85 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ParserSummary({
+  kind,
+  result
+}: {
+  kind: "resume" | "job";
+  result: ParseResumeResponse | ParseJobResponse | null;
+}) {
+  if (!result) {
+    return (
+      <article className="parser-result-card parser-result-empty">
+        <p className="eyebrow">{kind === "resume" ? "Resume Profile" : "Job Profile"}</p>
+        <h3>{kind === "resume" ? "Awaiting resume parse" : "Awaiting JD parse"}</h3>
+        <p>Structured fields, metadata, and warnings will land here.</p>
+      </article>
+    );
+  }
+
+  const isResume = kind === "resume";
+  const resumeProfile = isResume ? (result as ParseResumeResponse).profile : null;
+  const jobProfile = !isResume ? (result as ParseJobResponse).profile : null;
+  const title = resumeProfile
+    ? `${resumeProfile.skills.length} skills · ${resumeProfile.projects.length} projects`
+    : `${jobProfile?.company ?? "Unknown company"} · ${jobProfile?.title ?? "Untitled role"}`;
+  const summary = resumeProfile
+    ? `${resumeProfile.education.length} education · ${resumeProfile.experiences.length} experience · ${resumeProfile.keywords.length} keywords`
+    : `${jobProfile?.hard_requirements.length ?? 0} required · ${
+        jobProfile?.nice_to_have.length ?? 0
+      } preferred · ${jobProfile?.responsibilities.length ?? 0} responsibilities`;
+  const chips = resumeProfile
+    ? resumeProfile.skills.concat(resumeProfile.keywords).slice(0, 6)
+    : (jobProfile?.tech_keywords ?? []).concat(jobProfile?.hidden_keywords ?? []).slice(0, 6);
+
+  return (
+    <article className="parser-result-card liftable">
+      <p className="eyebrow">{isResume ? "Resume Profile" : "Job Profile"}</p>
+      <h3>{title}</h3>
+      <p>{summary}</p>
+      <div className="chip-row">
+        {(chips.length ? chips : ["No keywords yet"]).map((chip, index) => (
+          <span key={`${chip}-${index}`}>{chip}</span>
+        ))}
+      </div>
+      <dl className="metadata-row">
+        <div>
+          <dt>Source</dt>
+          <dd>{formatSource(result.metadata.source)}</dd>
+        </div>
+        <div>
+          <dt>Model</dt>
+          <dd>{result.metadata.model ?? "local"}</dd>
+        </div>
+        <div>
+          <dt>Issues</dt>
+          <dd>{result.metadata.issues.length}</dd>
+        </div>
+      </dl>
+    </article>
+  );
+}
+
+function WorkflowStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="workflow-stat">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 function formatState(state: string): string {
   return state
     .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function formatSource(source: string): string {
+  return source
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
