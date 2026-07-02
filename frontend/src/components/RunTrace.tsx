@@ -22,7 +22,7 @@ export function RunTrace({ detail }: { detail: RunDetail }) {
 
         <div className="timeline">
           {run.steps.map((step, index) => (
-            <article className="step-card liftable revealable" key={step.step_id}>
+            <article className="step-card liftable" key={step.step_id}>
               <div className="step-index">{String(index + 1).padStart(2, "0")}</div>
               <div className="step-body">
                 <div className="step-heading">
@@ -67,7 +67,7 @@ export function RunTrace({ detail }: { detail: RunDetail }) {
         <h2>Runtime signal</h2>
         <div className="event-stack">
           {run.events.map((event) => (
-            <div className="event-row liftable revealable" key={event.event_id}>
+            <div className="event-row liftable" key={event.event_id}>
               <span>{event.event_type}</span>
               <p>{event.message}</p>
             </div>

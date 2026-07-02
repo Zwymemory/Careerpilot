@@ -48,6 +48,11 @@ button:disabled {
   background: linear-gradient(145deg, #f6eee6 0%, #e1f1d7 34%, #bfe2ed 68%, #b9d4f4 100%);
 }
 
+.ambient-stage-busy::before {
+  opacity: calc(0.5 + var(--audio-level) * 0.14);
+  animation-duration: 8s;
+}
+
 .flow-canvas {
   position: fixed;
   inset: 0;
@@ -97,12 +102,205 @@ button:disabled {
   mask-image: linear-gradient(to bottom, transparent, black 12%, black 84%, transparent);
 }
 
+.scroll-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  perspective: 900px;
+  transform-style: preserve-3d;
+}
+
+.depth-halo {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: 74vw;
+  height: 54vw;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.24), transparent 56%),
+    repeating-radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.14) 0 1px,
+      transparent 1px 42px
+    );
+  opacity: calc(0.08 + var(--scroll-ratio) * 0.24);
+  transform:
+    translate3d(-50%, calc(-50% + var(--scroll-ratio) * -120px), -140px)
+    rotateX(calc(16deg + var(--scroll-ratio) * 10deg))
+    scale(calc(0.88 + var(--scroll-ratio) * 0.22));
+}
+
+.pixel-bloom {
+  position: fixed;
+  top: calc(18vh + var(--scroll-ratio) * 20vh);
+  width: 230px;
+  height: 430px;
+  opacity: calc(0.05 + var(--scroll-ratio) * 0.3);
+  filter: blur(0.2px);
+  mix-blend-mode: multiply;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 8px,
+      rgba(74, 111, 93, 0.2) 8px 11px,
+      transparent 11px 18px
+    ),
+    radial-gradient(circle at 45% 23%, rgba(244, 231, 177, 0.28), transparent 30%),
+    radial-gradient(circle at 54% 58%, rgba(74, 140, 123, 0.16), transparent 36%);
+  mask-image:
+    radial-gradient(ellipse at 44% 24%, black 0 18%, transparent 19%),
+    radial-gradient(ellipse at 26% 46%, black 0 20%, transparent 21%),
+    radial-gradient(ellipse at 66% 50%, black 0 23%, transparent 24%),
+    radial-gradient(ellipse at 48% 76%, black 0 22%, transparent 23%);
+  mask-composite: add;
+  animation: bloom-drift 12s ease-in-out infinite alternate;
+}
+
+.pixel-bloom-left {
+  left: max(18px, calc((100vw - 1180px) / 2 - 150px));
+  transform:
+    translate3d(calc(var(--scroll-ratio) * -24px), calc(var(--scroll-ratio) * -80px), -80px)
+    rotate(-2deg);
+}
+
+.pixel-bloom-right {
+  right: max(18px, calc((100vw - 1180px) / 2 - 150px));
+  transform:
+    translate3d(calc(var(--scroll-ratio) * 24px), calc(var(--scroll-ratio) * -70px), -80px)
+    rotate(2deg)
+    scaleX(-1);
+}
+
+.boot-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  grid-template-rows: 96px minmax(0, 1fr) 96px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 47% 40%, rgba(180, 204, 235, 0.42), transparent 33%),
+    linear-gradient(145deg, rgba(228, 239, 231, 0.98), rgba(203, 224, 239, 0.97) 42%, rgba(213, 244, 211, 0.96));
+  transition:
+    opacity 680ms ease,
+    filter 680ms ease,
+    transform 680ms cubic-bezier(0.18, 0.86, 0.3, 1);
+}
+
+.boot-loader-hidden {
+  opacity: 0;
+  filter: blur(18px);
+  transform: scale(1.04);
+}
+
+.boot-card {
+  display: grid;
+  align-self: center;
+  justify-items: center;
+  gap: 12px;
+  width: min(520px, 70vw);
+  margin: 0 auto;
+}
+
+.boot-rail {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 22px;
+  width: calc(100vw - 120px);
+  margin: 0 auto;
+  color: rgba(20, 56, 39, 0.84);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  font-weight: 760;
+  letter-spacing: 0.22em;
+}
+
+.boot-rail-top {
+  align-self: end;
+}
+
+.boot-rail-bottom {
+  align-self: start;
+}
+
+.boot-rail > i {
+  display: block;
+  height: 1px;
+  overflow: hidden;
+  background: rgba(20, 56, 39, 0.64);
+}
+
+.boot-rail-bottom > i {
+  position: relative;
+}
+
+.boot-rail-bottom > i b {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 76%;
+  background: rgba(20, 56, 39, 0.72);
+  transform-origin: left center;
+  animation: boot-progress 1.2s cubic-bezier(0.3, 0.72, 0.18, 1) both;
+}
+
+.boot-flower {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(20, 56, 39, 0.92) 0 18%, transparent 19%),
+    repeating-conic-gradient(
+      from 0deg,
+      rgba(20, 56, 39, 0.96) 0 18deg,
+      transparent 18deg 45deg
+    );
+  animation: boot-flower-turn 1.25s cubic-bezier(0.3, 0.72, 0.18, 1) both;
+}
+
+.boot-mark {
+  color: rgba(20, 56, 39, 0.9);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(42px, 5vw, 68px);
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.02;
+}
+
+.boot-submark {
+  color: rgba(20, 56, 39, 0.76);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  font-weight: 740;
+  letter-spacing: 0.08em;
+}
+
+.boot-center-line {
+  position: relative;
+  width: min(420px, 46vw);
+  height: 1px;
+  margin-top: 18px;
+  overflow: hidden;
+  background: rgba(20, 56, 39, 0.18);
+}
+
+.boot-center-line i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 58%;
+  background: rgba(20, 56, 39, 0.48);
+  animation: boot-center-run 1.2s cubic-bezier(0.3, 0.72, 0.18, 1) both;
+}
+
 .app-shell {
   position: relative;
   z-index: 1;
   width: min(1180px, calc(100vw - 32px));
   margin: 0 auto;
   padding: 118px 0 72px;
+  transform-style: preserve-3d;
 }
 
 .glass-surface {
@@ -561,6 +759,7 @@ h3 {
   justify-items: center;
   min-height: calc(100vh - 118px);
   padding: clamp(82px, 12vh, 132px) 0 clamp(42px, 6vh, 72px);
+  perspective: 900px;
 }
 
 .hero-copy {
@@ -576,11 +775,127 @@ h3 {
 
 .hero-copy.revealable.is-visible {
   opacity: var(--hero-copy-opacity, 1);
-  filter: blur(calc((1 - var(--hero-copy-opacity, 1)) * 10px));
+  filter: blur(calc((1 - var(--hero-copy-opacity, 1)) * 7px));
   transform:
-    translate3d(0, calc((1 - var(--hero-copy-opacity, 1)) * -18px), 0)
+    translate3d(0, calc((1 - var(--hero-copy-opacity, 1)) * -12px), calc((1 - var(--hero-copy-opacity, 1)) * -80px))
     scale(calc(0.985 + var(--hero-copy-opacity, 1) * 0.015));
   transition-delay: 0ms;
+}
+
+.model-orbit {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(132px, 19vh, 190px);
+  display: grid;
+  width: min(520px, 72vw);
+  height: 260px;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+  filter: blur(4px);
+  transform: translate3d(-50%, 18px, 90px) scale(0.92);
+  transition:
+    opacity 360ms ease,
+    transform 520ms cubic-bezier(0.18, 0.86, 0.3, 1),
+    filter 360ms ease;
+}
+
+.model-orbit-running,
+.model-orbit-complete {
+  opacity: 1;
+  filter: blur(0);
+  transform: translate3d(-50%, 0, 90px) scale(1);
+}
+
+.particle-field {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: visible;
+}
+
+.particle-dot {
+  --particle-angle: calc(var(--particle-index) * 137.5deg);
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(25, 47, 60, 0.52);
+  box-shadow:
+    0 0 10px rgba(255, 255, 255, 0.62),
+    0 0 18px rgba(85, 168, 185, 0.18);
+  opacity: 0;
+  transform:
+    rotate(var(--particle-angle))
+    translateX(calc(28px + var(--particle-index) * 1.1px))
+    scale(0.7);
+}
+
+.model-orbit-running .particle-dot {
+  opacity: 0.72;
+  animation: particle-flow 2.8s ease-in-out infinite;
+  animation-delay: calc(var(--particle-index) * -58ms);
+}
+
+.model-orbit-complete .particle-dot {
+  opacity: 0;
+  animation: particle-burst 950ms cubic-bezier(0.12, 0.74, 0.18, 1) both;
+  animation-delay: calc(var(--particle-index) * 7ms);
+}
+
+.orbit-ring,
+.orbit-core {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.orbit-ring-one {
+  width: 120px;
+  height: 120px;
+  border: 1px solid rgba(255, 255, 255, 0.64);
+  box-shadow: 0 0 44px rgba(71, 159, 170, 0.16);
+  animation: orbit-spin 2.6s linear infinite;
+}
+
+.orbit-ring-two {
+  width: 82px;
+  height: 82px;
+  border: 1px dashed rgba(40, 92, 117, 0.28);
+  animation: orbit-spin 6s linear infinite reverse;
+}
+
+.orbit-core {
+  width: 46px;
+  height: 46px;
+  background:
+    radial-gradient(circle at 35% 26%, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.2) 68%),
+    rgba(98, 184, 190, 0.2);
+  box-shadow:
+    0 18px 48px rgba(44, 101, 126, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.76);
+}
+
+.model-orbit strong {
+  position: absolute;
+  left: 50%;
+  top: calc(48% + 72px);
+  color: rgba(21, 33, 44, 0.62);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+}
+
+.model-orbit-complete .orbit-core {
+  background:
+    radial-gradient(circle at 35% 26%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.2) 68%),
+    rgba(88, 196, 152, 0.28);
+  animation: complete-pop 900ms ease both;
 }
 
 .command-dock {
@@ -608,6 +923,14 @@ h3 {
   backdrop-filter: blur(34px) saturate(1.28) brightness(1.04);
   -webkit-backdrop-filter: blur(34px) saturate(1.28) brightness(1.04);
   animation: surface-enter 860ms cubic-bezier(0.18, 0.86, 0.3, 1) 260ms both;
+}
+
+.ambient-stage-busy .command-dock {
+  box-shadow:
+    0 28px 76px rgba(48, 120, 138, 0.16),
+    0 10px 26px rgba(43, 67, 88, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .command-dock.glass-surface::before {
@@ -1039,8 +1362,13 @@ h3 {
 .trace-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 330px;
+  align-items: stretch;
   gap: 16px;
   margin-top: 16px;
+  transform:
+    translate3d(0, calc(var(--scroll-ratio) * -8px), 0)
+    perspective(1100px)
+    rotateX(calc(var(--scroll-ratio) * 0.45deg));
 }
 
 .trace-main,
@@ -1057,6 +1385,9 @@ h3 {
 }
 
 .event-panel {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
   animation: surface-enter 900ms cubic-bezier(0.18, 0.86, 0.3, 1) 900ms both;
 }
 
@@ -1092,14 +1423,35 @@ h3 {
 }
 
 .step-card {
+  position: relative;
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
   gap: 12px;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.62);
   border-radius: 8px;
   padding: 14px;
   background: rgba(255, 255, 255, 0.35);
   box-shadow: 0 14px 34px rgba(59, 111, 139, 0.1);
+}
+
+.step-card::after {
+  position: absolute;
+  inset: -40% -20%;
+  z-index: 0;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(110deg, transparent 0 38%, rgba(255, 255, 255, 0.22) 48%, transparent 58%),
+    radial-gradient(circle at 22% 20%, rgba(108, 190, 200, 0.08), transparent 30%);
+  opacity: 0.52;
+  transform: translateX(-42%);
+  animation: step-sheen 9s ease-in-out infinite;
+}
+
+.step-card > * {
+  position: relative;
+  z-index: 1;
 }
 
 .step-index {
@@ -1258,9 +1610,11 @@ dd {
 
 .event-stack {
   display: grid;
+  flex: 1;
+  align-content: start;
   gap: 10px;
-  max-height: 540px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   padding-right: 2px;
 }
 
@@ -1409,11 +1763,133 @@ dd {
   }
 }
 
+@keyframes bloom-drift {
+  from {
+    filter: blur(0.2px);
+  }
+  to {
+    filter: blur(0.6px);
+  }
+}
+
+@keyframes boot-progress {
+  from {
+    transform: scaleX(0.08);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes boot-center-run {
+  from {
+    transform: translateX(-100%) scaleX(0.4);
+  }
+  to {
+    transform: translateX(76%) scaleX(1);
+  }
+}
+
+@keyframes boot-flower-turn {
+  from {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@keyframes orbit-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes particle-flow {
+  0%,
+  100% {
+    transform:
+      rotate(var(--particle-angle))
+      translateX(calc(30px + var(--particle-index) * 0.9px))
+      scale(0.56);
+  }
+  50% {
+    transform:
+      rotate(calc(var(--particle-angle) + 28deg))
+      translateX(calc(72px + var(--particle-index) * 0.55px))
+      scale(1);
+  }
+}
+
+@keyframes particle-burst {
+  0% {
+    opacity: 0.78;
+    transform:
+      rotate(var(--particle-angle))
+      translateX(calc(42px + var(--particle-index) * 0.7px))
+      scale(0.8);
+  }
+  68% {
+    opacity: 0.5;
+    transform:
+      rotate(calc(var(--particle-angle) + 18deg))
+      translateX(calc(138px + var(--particle-index) * 1.8px))
+      scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform:
+      rotate(calc(var(--particle-angle) + 30deg))
+      translateX(calc(190px + var(--particle-index) * 2.4px))
+      scale(0.2);
+  }
+}
+
+@keyframes complete-pop {
+  0% {
+    transform: translate(-50%, -50%) scale(0.78);
+    box-shadow:
+      0 18px 48px rgba(44, 101, 126, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  }
+  44% {
+    transform: translate(-50%, -50%) scale(1.32);
+    box-shadow:
+      0 0 0 28px rgba(87, 198, 158, 0.08),
+      0 24px 58px rgba(44, 101, 126, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow:
+      0 18px 48px rgba(44, 101, 126, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  }
+}
+
+@keyframes step-sheen {
+  0%,
+  58% {
+    transform: translateX(-42%);
+  }
+  100% {
+    transform: translateX(42%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ambient-stage::before,
   .pulse-dot-on,
   .metric.glass-surface::before,
   .metric-visual,
+  .particle-dot,
+  .orbit-ring,
+  .boot-loader,
   .minimal-nav,
   .hero-copy,
   .command-dock,
@@ -1421,6 +1897,7 @@ dd {
   .metric,
   .trace-main,
   .event-panel,
+  .step-card::after,
   .empty-state,
   .run-list {
     animation: none;

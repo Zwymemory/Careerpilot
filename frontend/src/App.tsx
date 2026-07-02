@@ -38,6 +38,8 @@ export default function App() {
   const [workflowAction, setWorkflowAction] = useState<WorkflowAction | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [approvalNotes, setApprovalNotes] = useState("");
+  const [isBooting, setIsBooting] = useState(true);
+  const [completionPulse, setCompletionPulse] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [audioName, setAudioName] = useState("No track");
@@ -55,6 +57,7 @@ export default function App() {
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const audioFrameRef = useRef<number | null>(null);
   const backgroundFrameRef = useRef<number | null>(null);
+  const completionTimerRef = useRef<number | null>(null);
   const audioLevelRef = useRef(0);
   const pointerRef = useRef({ x: 0, y: 0, targetX: 0, targetY: 0, scroll: 0 });
 
@@ -66,6 +69,25 @@ export default function App() {
   async function showRun(runId: string) {
     const detail = await getRun(runId);
     setActiveRun(detail);
+  }
+
+  function markRequestComplete() {
+    setCompletionPulse(true);
+    if (completionTimerRef.current) {
+      window.clearTimeout(completionTimerRef.current);
+    }
+    completionTimerRef.current = window.setTimeout(() => {
+      setCompletionPulse(false);
+      completionTimerRef.current = null;
+    }, 1500);
+  }
+
+  function clearCompletionPulse() {
+    if (completionTimerRef.current) {
+      window.clearTimeout(completionTimerRef.current);
+      completionTimerRef.current = null;
+    }
+    setCompletionPulse(false);
   }
 
   useLayoutEffect(() => {
@@ -87,20 +109,25 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const bootTimer = window.setTimeout(() => setIsBooting(false), 1350);
+    return () => window.clearTimeout(bootTimer);
+  }, []);
+
+  useEffect(() => {
     const revealItems = Array.from(document.querySelectorAll<HTMLElement>(".revealable"));
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.target.classList.contains("reveal-once")) {
-            if (entry.isIntersecting) {
-              entry.target.classList.add("is-visible");
-            }
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
             return;
           }
-          entry.target.classList.toggle("is-visible", entry.isIntersecting);
+          if (entry.target.classList.contains("reveal-repeat")) {
+            entry.target.classList.remove("is-visible");
+          }
         });
       },
-      { rootMargin: "-8% 0px -10% 0px", threshold: 0.16 },
+      { rootMargin: "18% 0px -2% 0px", threshold: 0.04 },
     );
 
     revealItems.forEach((item) => observer.observe(item));
@@ -129,7 +156,7 @@ export default function App() {
       const heroCopy = heroCopyRef.current;
       if (heroCopy) {
         const rect = heroCopy.getBoundingClientRect();
-        const opacity = Math.max(0, Math.min(1, (rect.bottom - 8) / 150));
+        const opacity = Math.max(0, Math.min(1, (rect.bottom - 44) / 260));
         heroCopy.style.setProperty("--hero-copy-opacity", opacity.toFixed(3));
       }
     };
@@ -294,6 +321,9 @@ export default function App() {
       if (audioFrameRef.current) {
         cancelAnimationFrame(audioFrameRef.current);
       }
+      if (completionTimerRef.current) {
+        window.clearTimeout(completionTimerRef.current);
+      }
       audioContextRef.current?.close();
     };
   }, []);
@@ -306,10 +336,12 @@ export default function App() {
 
     setIsLoading(true);
     setError(null);
+    clearCompletionPulse();
     try {
       const detail = await createRun(runGoal);
       setActiveRun(detail);
       await refreshRuns();
+      markRequestComplete();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create run.");
     } finally {
@@ -326,11 +358,13 @@ export default function App() {
 
     setWorkflowAction("resume-parser");
     setWorkflowError(null);
+    clearCompletionPulse();
     try {
       const result = await parseResume(text);
       setResumeResult(result);
       await showRun(result.run_id);
       await refreshRuns();
+      markRequestComplete();
     } catch (err) {
       setWorkflowError(err instanceof Error ? err.message : "Resume parser failed.");
     } finally {
@@ -347,11 +381,13 @@ export default function App() {
 
     setWorkflowAction("job-parser");
     setWorkflowError(null);
+    clearCompletionPulse();
     try {
       const result = await parseJob(text);
       setJobResult(result);
       await showRun(result.run_id);
       await refreshRuns();
+      markRequestComplete();
     } catch (err) {
       setWorkflowError(err instanceof Error ? err.message : "Job parser failed.");
     } finally {
@@ -370,6 +406,7 @@ export default function App() {
 
     setWorkflowAction("loop-run");
     setWorkflowError(null);
+    clearCompletionPulse();
     try {
       const detail = await createLoopRun({
         goal: runGoal,
@@ -378,6 +415,7 @@ export default function App() {
       });
       setActiveRun(detail);
       await refreshRuns();
+      markRequestComplete();
     } catch (err) {
       setWorkflowError(err instanceof Error ? err.message : "LoopEngine run failed.");
     } finally {
@@ -392,11 +430,13 @@ export default function App() {
 
     setWorkflowAction("loop-approval");
     setWorkflowError(null);
+    clearCompletionPulse();
     try {
       const detail = await approveLoopRun(activeRun.run.run_id, approvalNotes.trim());
       setActiveRun(detail);
       setApprovalNotes("");
       await refreshRuns();
+      markRequestComplete();
     } catch (err) {
       setWorkflowError(err instanceof Error ? err.message : "Approval failed.");
     } finally {
@@ -411,10 +451,12 @@ export default function App() {
 
     setWorkflowAction("loop-resume");
     setWorkflowError(null);
+    clearCompletionPulse();
     try {
       const detail = await resumeLoopRun(activeRun.run.run_id);
       setActiveRun(detail);
       await refreshRuns();
+      markRequestComplete();
     } catch (err) {
       setWorkflowError(err instanceof Error ? err.message : "Resume failed.");
     } finally {
@@ -496,12 +538,41 @@ export default function App() {
   const activeStepCount = activeRun?.run.steps.length ?? latestSummary?.step_count ?? 0;
   const canApproveActiveRun = activeRun?.run.state === "WAITING_APPROVAL";
   const canResumeActiveRun = activeRun?.run.state === "FAILED";
+  const isModelWorking = isLoading || workflowAction !== null;
+  const modelParticles = useMemo(() => Array.from({ length: 52 }, (_, index) => index), []);
 
   return (
-    <div className="ambient-stage" ref={shellRef}>
+    <div className={`ambient-stage ${isModelWorking ? "ambient-stage-busy" : ""}`} ref={shellRef}>
       <canvas className="flow-canvas" ref={flowCanvasRef} aria-hidden="true" />
+      <div className="scroll-atmosphere" aria-hidden="true">
+        <span className="depth-halo" />
+        <span className="pixel-bloom pixel-bloom-left" />
+        <span className="pixel-bloom pixel-bloom-right" />
+      </div>
       <div className="ambient-noise" />
       <audio ref={audioRef} onEnded={() => setIsPlaying(false)} />
+      <div className={`boot-loader ${isBooting ? "" : "boot-loader-hidden"}`} aria-hidden="true">
+        <div className="boot-rail boot-rail-top">
+          <span>CAREERPILOT</span>
+          <i />
+          <span>2026</span>
+        </div>
+        <div className="boot-card">
+          <span className="boot-flower" />
+          <span className="boot-mark">CareerPilot</span>
+          <span className="boot-submark">Agent · Trace · Studio</span>
+          <span className="boot-center-line">
+            <i />
+          </span>
+        </div>
+        <div className="boot-rail boot-rail-bottom">
+          <span>LOADING</span>
+          <i>
+            <b />
+          </i>
+          <span>091</span>
+        </div>
+      </div>
 
       <main className="app-shell">
         <header
@@ -576,6 +647,27 @@ export default function App() {
           <div className="hero-copy revealable reveal-once reveal-delay-1" ref={heroCopyRef}>
             <p className="eyebrow">我在听，CareerPilot</p>
             <h2>Agent の 轨迹。</h2>
+          </div>
+
+          <div
+            className={`model-orbit ${
+              isModelWorking ? "model-orbit-running" : completionPulse ? "model-orbit-complete" : ""
+            }`}
+            aria-hidden={!isModelWorking && !completionPulse}
+          >
+            <span className="particle-field">
+              {modelParticles.map((particle) => (
+                <span
+                  className="particle-dot"
+                  key={particle}
+                  style={{ "--particle-index": particle } as React.CSSProperties}
+                />
+              ))}
+            </span>
+            <span className="orbit-ring orbit-ring-one" />
+            <span className="orbit-ring orbit-ring-two" />
+            <span className="orbit-core" />
+            <strong>{isModelWorking ? "Tracing" : "Completed"}</strong>
           </div>
 
           <div className="command-dock glass-surface liftable revealable reveal-delay-2">
