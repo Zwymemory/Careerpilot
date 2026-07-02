@@ -43,9 +43,9 @@ export default function App() {
     }
 
     input.style.height = "auto";
-    const nextHeight = Math.min(input.scrollHeight, 156);
+    const nextHeight = Math.min(input.scrollHeight, 132);
     input.style.height = `${nextHeight}px`;
-    input.style.overflowY = input.scrollHeight > 156 ? "auto" : "hidden";
+    input.style.overflowY = input.scrollHeight > 132 ? "auto" : "hidden";
   }, [goal]);
 
   useEffect(() => {

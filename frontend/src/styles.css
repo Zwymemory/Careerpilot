@@ -586,14 +586,14 @@ h3 {
 .command-dock {
   align-self: end;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 48px;
+  grid-template-columns: 38px minmax(0, 1fr) 41px;
   align-items: end;
-  gap: 10px;
-  width: min(820px, 100%);
-  min-height: 64px;
+  gap: 8px;
+  width: min(700px, 100%);
+  min-height: 54px;
   margin-top: clamp(76px, 10vh, 116px);
-  padding: 10px 10px 10px 14px;
-  border-radius: 34px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 29px;
   border-color: rgba(255, 255, 255, 0.7);
   background:
     radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.58), transparent 36%),
@@ -630,21 +630,21 @@ h3 {
 .goal-input {
   width: 100%;
   min-width: 0;
-  min-height: 48px;
-  max-height: 156px;
+  min-height: 41px;
+  max-height: 132px;
   resize: none;
   overflow: hidden;
   border: 0;
   border-radius: 0;
   outline: 0;
-  padding: 10px 4px;
+  padding: 8px 3px;
   color: #172b3a;
   background: transparent;
   box-shadow: none;
   caret-color: #10293a;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 520;
-  line-height: 28px;
+  line-height: 25px;
   scrollbar-width: thin;
   transition:
     color 220ms ease,
@@ -664,10 +664,10 @@ h3 {
   display: inline-grid;
   place-items: center;
   align-self: end;
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
   border-radius: 999px;
 }
 
@@ -675,14 +675,14 @@ h3 {
   color: #10293a;
   background: transparent;
   box-shadow: none;
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 310;
   line-height: 1;
 }
 
 .composer-icon span {
   display: block;
-  transform: translateY(-2px);
+  transform: translateY(-4px);
 }
 
 .composer-icon:hover {
@@ -701,13 +701,13 @@ h3 {
   box-shadow:
     0 14px 30px rgba(11, 29, 42, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  font-size: 25px;
+  font-size: 21px;
   font-weight: 780;
   line-height: 1;
 }
 
 .composer-send span {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .composer-send.liftable:hover:not(:disabled) {
@@ -1242,13 +1242,13 @@ dd {
   }
 
   .command-dock {
-    grid-template-columns: 42px minmax(0, 1fr) 44px;
+    grid-template-columns: 36px minmax(0, 1fr) 38px;
     margin-top: 48px;
-    padding: 9px 9px 9px 12px;
+    padding: 8px 8px 8px 10px;
   }
 
   .goal-input {
-    min-height: 46px;
+    min-height: 40px;
   }
 
   .primary-action {
