@@ -47,7 +47,7 @@ export default function App() {
           entry.target.classList.toggle("is-visible", entry.isIntersecting);
         });
       },
-      { rootMargin: "120px 0px 120px 0px", threshold: 0.01 },
+      { rootMargin: "-8% 0px -10% 0px", threshold: 0.16 },
     );
 
     revealItems.forEach((item) => observer.observe(item));
