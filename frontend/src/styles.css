@@ -53,6 +53,11 @@ button:disabled {
   animation-duration: 8s;
 }
 
+.ambient-stage-complete::before {
+  opacity: calc(0.54 + var(--audio-level) * 0.14);
+  filter: blur(calc(28px + var(--audio-level) * 18px));
+}
+
 .flow-canvas {
   position: fixed;
   inset: 0;
@@ -240,10 +245,10 @@ button:disabled {
 .boot-rail-bottom > i b {
   position: absolute;
   inset: 0 auto 0 0;
-  width: 76%;
+  width: var(--boot-progress, 0%);
   background: rgba(20, 56, 39, 0.72);
   transform-origin: left center;
-  animation: boot-progress 1.2s cubic-bezier(0.3, 0.72, 0.18, 1) both;
+  transition: width 120ms linear;
 }
 
 .boot-flower {
@@ -338,6 +343,17 @@ button:disabled {
   opacity: 1;
   transform: translate3d(0, 0, 0) scale(1);
   filter: blur(0);
+}
+
+.scroll-fade {
+  --scroll-fade-opacity: 0;
+  opacity: var(--scroll-fade-opacity);
+  transition:
+    opacity 120ms linear,
+    box-shadow 260ms ease,
+    border-color 260ms ease,
+    background 260ms ease,
+    transform 260ms ease;
 }
 
 .reveal-delay-0 {
@@ -782,122 +798,6 @@ h3 {
   transition-delay: 0ms;
 }
 
-.model-orbit {
-  position: absolute;
-  left: 50%;
-  bottom: clamp(132px, 19vh, 190px);
-  display: grid;
-  width: min(520px, 72vw);
-  height: 260px;
-  place-items: center;
-  opacity: 0;
-  pointer-events: none;
-  filter: blur(4px);
-  transform: translate3d(-50%, 18px, 90px) scale(0.92);
-  transition:
-    opacity 360ms ease,
-    transform 520ms cubic-bezier(0.18, 0.86, 0.3, 1),
-    filter 360ms ease;
-}
-
-.model-orbit-running,
-.model-orbit-complete {
-  opacity: 1;
-  filter: blur(0);
-  transform: translate3d(-50%, 0, 90px) scale(1);
-}
-
-.particle-field {
-  position: absolute;
-  inset: 0;
-  display: block;
-  overflow: visible;
-}
-
-.particle-dot {
-  --particle-angle: calc(var(--particle-index) * 137.5deg);
-  position: absolute;
-  left: 50%;
-  top: 48%;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: rgba(25, 47, 60, 0.52);
-  box-shadow:
-    0 0 10px rgba(255, 255, 255, 0.62),
-    0 0 18px rgba(85, 168, 185, 0.18);
-  opacity: 0;
-  transform:
-    rotate(var(--particle-angle))
-    translateX(calc(28px + var(--particle-index) * 1.1px))
-    scale(0.7);
-}
-
-.model-orbit-running .particle-dot {
-  opacity: 0.72;
-  animation: particle-flow 2.8s ease-in-out infinite;
-  animation-delay: calc(var(--particle-index) * -58ms);
-}
-
-.model-orbit-complete .particle-dot {
-  opacity: 0;
-  animation: particle-burst 950ms cubic-bezier(0.12, 0.74, 0.18, 1) both;
-  animation-delay: calc(var(--particle-index) * 7ms);
-}
-
-.orbit-ring,
-.orbit-core {
-  position: absolute;
-  left: 50%;
-  top: 48%;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.orbit-ring-one {
-  width: 120px;
-  height: 120px;
-  border: 1px solid rgba(255, 255, 255, 0.64);
-  box-shadow: 0 0 44px rgba(71, 159, 170, 0.16);
-  animation: orbit-spin 2.6s linear infinite;
-}
-
-.orbit-ring-two {
-  width: 82px;
-  height: 82px;
-  border: 1px dashed rgba(40, 92, 117, 0.28);
-  animation: orbit-spin 6s linear infinite reverse;
-}
-
-.orbit-core {
-  width: 46px;
-  height: 46px;
-  background:
-    radial-gradient(circle at 35% 26%, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.2) 68%),
-    rgba(98, 184, 190, 0.2);
-  box-shadow:
-    0 18px 48px rgba(44, 101, 126, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.76);
-}
-
-.model-orbit strong {
-  position: absolute;
-  left: 50%;
-  top: calc(48% + 72px);
-  color: rgba(21, 33, 44, 0.62);
-  font-size: 11px;
-  font-weight: 850;
-  text-transform: uppercase;
-  transform: translateX(-50%);
-}
-
-.model-orbit-complete .orbit-core {
-  background:
-    radial-gradient(circle at 35% 26%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.2) 68%),
-    rgba(88, 196, 152, 0.28);
-  animation: complete-pop 900ms ease both;
-}
-
 .command-dock {
   align-self: end;
   display: grid;
@@ -1191,7 +1091,6 @@ h3 {
 .workflow-panel {
   min-width: 0;
   padding: 20px;
-  animation: surface-enter 900ms cubic-bezier(0.18, 0.86, 0.3, 1) 700ms both;
 }
 
 .workflow-panel.liftable:hover {
@@ -1772,15 +1671,6 @@ dd {
   }
 }
 
-@keyframes boot-progress {
-  from {
-    transform: scaleX(0.08);
-  }
-  to {
-    transform: scaleX(1);
-  }
-}
-
 @keyframes boot-center-run {
   from {
     transform: translateX(-100%) scaleX(0.4);
@@ -1801,77 +1691,6 @@ dd {
   }
 }
 
-@keyframes orbit-spin {
-  from {
-    transform: translate(-50%, -50%) rotate(0deg);
-  }
-  to {
-    transform: translate(-50%, -50%) rotate(360deg);
-  }
-}
-
-@keyframes particle-flow {
-  0%,
-  100% {
-    transform:
-      rotate(var(--particle-angle))
-      translateX(calc(30px + var(--particle-index) * 0.9px))
-      scale(0.56);
-  }
-  50% {
-    transform:
-      rotate(calc(var(--particle-angle) + 28deg))
-      translateX(calc(72px + var(--particle-index) * 0.55px))
-      scale(1);
-  }
-}
-
-@keyframes particle-burst {
-  0% {
-    opacity: 0.78;
-    transform:
-      rotate(var(--particle-angle))
-      translateX(calc(42px + var(--particle-index) * 0.7px))
-      scale(0.8);
-  }
-  68% {
-    opacity: 0.5;
-    transform:
-      rotate(calc(var(--particle-angle) + 18deg))
-      translateX(calc(138px + var(--particle-index) * 1.8px))
-      scale(1.08);
-  }
-  100% {
-    opacity: 0;
-    transform:
-      rotate(calc(var(--particle-angle) + 30deg))
-      translateX(calc(190px + var(--particle-index) * 2.4px))
-      scale(0.2);
-  }
-}
-
-@keyframes complete-pop {
-  0% {
-    transform: translate(-50%, -50%) scale(0.78);
-    box-shadow:
-      0 18px 48px rgba(44, 101, 126, 0.16),
-      inset 0 1px 0 rgba(255, 255, 255, 0.76);
-  }
-  44% {
-    transform: translate(-50%, -50%) scale(1.32);
-    box-shadow:
-      0 0 0 28px rgba(87, 198, 158, 0.08),
-      0 24px 58px rgba(44, 101, 126, 0.2),
-      inset 0 1px 0 rgba(255, 255, 255, 0.86);
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1);
-    box-shadow:
-      0 18px 48px rgba(44, 101, 126, 0.16),
-      inset 0 1px 0 rgba(255, 255, 255, 0.76);
-  }
-}
-
 @keyframes step-sheen {
   0%,
   58% {
@@ -1887,8 +1706,6 @@ dd {
   .pulse-dot-on,
   .metric.glass-surface::before,
   .metric-visual,
-  .particle-dot,
-  .orbit-ring,
   .boot-loader,
   .minimal-nav,
   .hero-copy,

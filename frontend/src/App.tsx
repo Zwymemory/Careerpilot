@@ -27,6 +27,15 @@ type WorkflowAction =
   | "loop-approval"
   | "loop-resume";
 
+interface CanvasParticle {
+  x: number;
+  y: number;
+  phase: number;
+  size: number;
+  drift: number;
+  hue: number;
+}
+
 export default function App() {
   const [goal, setGoal] = useState(defaultGoal);
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -39,6 +48,7 @@ export default function App() {
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [approvalNotes, setApprovalNotes] = useState("");
   const [isBooting, setIsBooting] = useState(true);
+  const [bootProgress, setBootProgress] = useState(0);
   const [completionPulse, setCompletionPulse] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +69,8 @@ export default function App() {
   const backgroundFrameRef = useRef<number | null>(null);
   const completionTimerRef = useRef<number | null>(null);
   const audioLevelRef = useRef(0);
+  const particleFieldRef = useRef<CanvasParticle[]>([]);
+  const modelMotionRef = useRef({ busy: false, burstStartedAt: 0 });
   const pointerRef = useRef({ x: 0, y: 0, targetX: 0, targetY: 0, scroll: 0 });
 
   async function refreshRuns() {
@@ -109,9 +121,36 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const bootTimer = window.setTimeout(() => setIsBooting(false), 1350);
-    return () => window.clearTimeout(bootTimer);
+    const duration = 1600;
+    const startedAt = performance.now();
+    let frame = 0;
+    let hideTimer = 0;
+
+    const tick = (now: number) => {
+      const progress = Math.min(100, Math.round(((now - startedAt) / duration) * 100));
+      setBootProgress(progress);
+
+      if (progress < 100) {
+        frame = requestAnimationFrame(tick);
+        return;
+      }
+
+      hideTimer = window.setTimeout(() => setIsBooting(false), 260);
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(hideTimer);
+    };
   }, []);
+
+  useEffect(() => {
+    modelMotionRef.current.busy = isLoading || workflowAction !== null;
+    if (completionPulse) {
+      modelMotionRef.current.burstStartedAt = performance.now();
+    }
+  }, [completionPulse, isLoading, workflowAction]);
 
   useEffect(() => {
     const revealItems = Array.from(document.querySelectorAll<HTMLElement>(".revealable"));
@@ -159,6 +198,14 @@ export default function App() {
         const opacity = Math.max(0, Math.min(1, (rect.bottom - 44) / 260));
         heroCopy.style.setProperty("--hero-copy-opacity", opacity.toFixed(3));
       }
+
+      document.querySelectorAll<HTMLElement>(".scroll-fade").forEach((item) => {
+        const rect = item.getBoundingClientRect();
+        const entering = Math.max(0, Math.min(1, (window.innerHeight - rect.top) / 320));
+        const leaving = Math.max(0, Math.min(1, rect.bottom / 320));
+        const opacity = Math.min(entering, leaving);
+        item.style.setProperty("--scroll-fade-opacity", opacity.toFixed(3));
+      });
     };
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -204,6 +251,18 @@ export default function App() {
       { hue: 174, sat: 72, light: 76 },
     ];
 
+    const seedParticles = () => {
+      const particleCount = 190;
+      particleFieldRef.current = Array.from({ length: particleCount }, (_, index) => ({
+        x: Math.random(),
+        y: Math.random(),
+        phase: Math.random() * Math.PI * 2 + index * 0.021,
+        size: 0.55 + Math.random() * 1.45,
+        drift: 0.35 + Math.random() * 0.9,
+        hue: 178 + Math.random() * 74,
+      }));
+    };
+
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.floor(window.innerWidth * dpr);
@@ -211,6 +270,9 @@ export default function App() {
       canvas.style.width = `${window.innerWidth}px`;
       canvas.style.height = `${window.innerHeight}px`;
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (particleFieldRef.current.length === 0) {
+        seedParticles();
+      }
     };
 
     const draw = (now: number) => {
@@ -278,6 +340,65 @@ export default function App() {
         context.strokeStyle = `hsla(${hue}, 76%, 74%, ${0.11 + audioLift * 0.05})`;
         context.stroke();
       }
+      context.restore();
+
+      const motion = modelMotionRef.current;
+      const burstElapsed = motion.burstStartedAt ? now - motion.burstStartedAt : 1800;
+      const burst = Math.max(0, 1 - burstElapsed / 1200);
+      const busy = motion.busy ? 1 : 0;
+      const centerX = width * (0.5 + pointer.x * 0.035);
+      const centerY = height * (0.49 + pointer.y * 0.025 - pointer.scroll * 0.04);
+
+      context.save();
+      context.globalCompositeOperation = "screen";
+      particleFieldRef.current.forEach((particle, index) => {
+        const orbit = particle.phase + t * (0.12 + busy * 1.5) + index * 0.004;
+        const baseX =
+          particle.x * width +
+          Math.sin(t * 0.12 * particle.drift + particle.phase) * (18 + audioLift * 16) +
+          pointer.x * 34;
+        const baseY =
+          particle.y * height +
+          Math.cos(t * 0.1 * particle.drift + particle.phase * 1.4) * (18 + audioLift * 14) +
+          pointer.y * 26 +
+          pointer.scroll * height * 0.12;
+        const pull = busy * 0.2;
+        let x =
+          baseX * (1 - pull) +
+          centerX * pull +
+          Math.cos(orbit) * (busy * 80 + audioLift * 22) * particle.drift;
+        let y =
+          baseY * (1 - pull) +
+          centerY * pull +
+          Math.sin(orbit * 1.16) * (busy * 58 + audioLift * 18) * particle.drift;
+
+        if (burst > 0) {
+          const dx = x - centerX;
+          const dy = y - centerY;
+          const distance = Math.max(24, Math.hypot(dx, dy));
+          x += (dx / distance) * burst * 240 * particle.drift;
+          y += (dy / distance) * burst * 178 * particle.drift;
+        }
+
+        const opacity =
+          0.055 + audioLift * 0.05 + busy * 0.13 + burst * (0.25 + particle.drift * 0.08);
+        context.beginPath();
+        context.fillStyle = `hsla(${particle.hue}, 78%, 82%, ${opacity})`;
+        context.arc(x, y, particle.size + busy * 0.75 + burst * 0.7, 0, Math.PI * 2);
+        context.fill();
+
+        if ((index + Math.floor(t * 8)) % 19 === 0) {
+          context.beginPath();
+          context.moveTo(x, y);
+          context.lineTo(
+            x + Math.cos(orbit + Math.PI / 2) * (14 + busy * 28),
+            y + Math.sin(orbit + Math.PI / 2) * (12 + busy * 24),
+          );
+          context.strokeStyle = `hsla(${particle.hue}, 82%, 88%, ${0.035 + busy * 0.05 + burst * 0.06})`;
+          context.lineWidth = 0.8;
+          context.stroke();
+        }
+      });
       context.restore();
 
       context.globalCompositeOperation = "source-over";
@@ -539,10 +660,14 @@ export default function App() {
   const canApproveActiveRun = activeRun?.run.state === "WAITING_APPROVAL";
   const canResumeActiveRun = activeRun?.run.state === "FAILED";
   const isModelWorking = isLoading || workflowAction !== null;
-  const modelParticles = useMemo(() => Array.from({ length: 52 }, (_, index) => index), []);
 
   return (
-    <div className={`ambient-stage ${isModelWorking ? "ambient-stage-busy" : ""}`} ref={shellRef}>
+    <div
+      className={`ambient-stage ${isModelWorking ? "ambient-stage-busy" : ""} ${
+        completionPulse ? "ambient-stage-complete" : ""
+      }`}
+      ref={shellRef}
+    >
       <canvas className="flow-canvas" ref={flowCanvasRef} aria-hidden="true" />
       <div className="scroll-atmosphere" aria-hidden="true">
         <span className="depth-halo" />
@@ -567,10 +692,10 @@ export default function App() {
         </div>
         <div className="boot-rail boot-rail-bottom">
           <span>LOADING</span>
-          <i>
+          <i style={{ "--boot-progress": `${bootProgress}%` } as React.CSSProperties}>
             <b />
           </i>
-          <span>091</span>
+          <span>{bootProgress.toString().padStart(3, "0")}</span>
         </div>
       </div>
 
@@ -649,27 +774,6 @@ export default function App() {
             <h2>Agent の 轨迹。</h2>
           </div>
 
-          <div
-            className={`model-orbit ${
-              isModelWorking ? "model-orbit-running" : completionPulse ? "model-orbit-complete" : ""
-            }`}
-            aria-hidden={!isModelWorking && !completionPulse}
-          >
-            <span className="particle-field">
-              {modelParticles.map((particle) => (
-                <span
-                  className="particle-dot"
-                  key={particle}
-                  style={{ "--particle-index": particle } as React.CSSProperties}
-                />
-              ))}
-            </span>
-            <span className="orbit-ring orbit-ring-one" />
-            <span className="orbit-ring orbit-ring-two" />
-            <span className="orbit-core" />
-            <strong>{isModelWorking ? "Tracing" : "Completed"}</strong>
-          </div>
-
           <div className="command-dock glass-surface liftable revealable reveal-delay-2">
             <button
               className="composer-icon composer-plus"
@@ -719,7 +823,7 @@ export default function App() {
         </section>
 
         <section className="workflow-board">
-          <section className="workflow-panel glass-surface liftable revealable">
+          <section className="workflow-panel scroll-fade glass-surface liftable">
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Week2 Parser</p>
@@ -769,7 +873,7 @@ export default function App() {
             </div>
           </section>
 
-          <section className="workflow-panel glass-surface liftable revealable reveal-delay-1">
+          <section className="workflow-panel scroll-fade glass-surface liftable">
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Week3 LoopEngine</p>
