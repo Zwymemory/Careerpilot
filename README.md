@@ -2,7 +2,8 @@
 
 CareerPilot is an AI Agent workflow platform for internship and early-career job search preparation. It focuses on traceable, evidence-locked workflows: resume parsing, job analysis, matching, resume tailoring, approval, interview preparation, feedback, and evaluation.
 
-Week1 establishes the runnable project skeleton, and Week2 adds structured resume/JD parsing:
+Week1 establishes the runnable project skeleton, Week2 adds structured resume/JD parsing,
+and Week3 introduces the LoopEngine:
 
 - Python/FastAPI backend
 - React + TypeScript frontend
@@ -11,6 +12,8 @@ Week1 establishes the runnable project skeleton, and Week2 adds structured resum
 - Human approval checkpoint before user-facing artifact export
 - ResumeParserAgent and JobIntelAgent structured parser endpoints
 - JSON repair plus Pydantic schema validation
+- LoopEngine with Plan / Execute / Verify / Reflect / Human Approval / Commit
+- Checkpoints, event stream, idempotency, and resume-from-failure scaffolding
 
 ## Start Backend
 
@@ -69,11 +72,40 @@ curl -X POST http://localhost:8000/api/parsers/job \
   }'
 ```
 
+Create a Week3 LoopEngine run:
+
+```bash
+curl -X POST http://localhost:8000/api/loop-runs \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: loop-demo-1" \
+  -d '{
+    "user_id": "local-user",
+    "goal": "为 AI Agent 实习岗位生成可追踪的匹配准备流程",
+    "resume_text": "Education: Example University\nSkills: Python, FastAPI, React\nProject: CareerPilot built a traceable Agent workflow.",
+    "job_text": "Company: Example AI\nTitle: AI Agent Backend Intern\nRequired: Python, FastAPI, SQL\nPreferred: React, TypeScript"
+  }'
+```
+
+Approve and commit a loop run:
+
+```bash
+curl -X POST http://localhost:8000/api/loop-runs/{run_id}/approve \
+  -H "Content-Type: application/json" \
+  -d '{"approved_by":"local-user","notes":"确认进入后续匹配流程"}'
+```
+
+Stream loop events:
+
+```bash
+curl http://localhost:8000/api/loop-runs/{run_id}/events/stream
+```
+
 ## Current Limits
 
-- The run store is in memory. PostgreSQL repositories are planned for the LoopEngine phase.
+- The run store is in memory. PostgreSQL repositories are planned for a production persistence phase.
 - LLM calls default to dry-run mode unless `LLM_API_KEY` is configured.
 - Week2 parser endpoints use a conservative heuristic parser in dry-run mode. Real LLM structured parsing is available once an OpenAI-compatible API key is configured.
+- Week3 event streaming currently returns existing events in SSE format. Continuous background streaming will become more useful after a queue/worker is introduced.
 - Artifact export, matching, resume rewriting, browser tools, and evaluation harness are planned for later weeks.
 
 ## Safety Rule

@@ -29,9 +29,12 @@ class EventType(StrEnum):
     STATE_CHANGED = "STATE_CHANGED"
     STEP_STARTED = "STEP_STARTED"
     STEP_COMPLETED = "STEP_COMPLETED"
+    CHECKPOINT_SAVED = "CHECKPOINT_SAVED"
+    RESUME_REQUESTED = "RESUME_REQUESTED"
     LLM_CALL_COMPLETED = "LLM_CALL_COMPLETED"
     COST_RECORDED = "COST_RECORDED"
     APPROVAL_REQUIRED = "APPROVAL_REQUIRED"
+    APPROVAL_COMPLETED = "APPROVAL_COMPLETED"
     ERROR = "ERROR"
 
 
@@ -71,6 +74,16 @@ class AgentStep(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class AgentCheckpoint(BaseModel):
+    checkpoint_id: str
+    run_id: str
+    step_id: str | None = None
+    name: str
+    phase: str
+    data: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class AgentRun(BaseModel):
     run_id: str
     user_id: str
@@ -81,6 +94,7 @@ class AgentRun(BaseModel):
     steps: list[AgentStep] = Field(default_factory=list)
     events: list[AgentEvent] = Field(default_factory=list)
     costs: list[CostUsage] = Field(default_factory=list)
+    checkpoints: list[AgentCheckpoint] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

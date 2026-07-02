@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.schemas.run import (
+    AgentCheckpoint,
     AgentEvent,
     AgentRun,
     AgentStep,
@@ -121,18 +122,38 @@ class RunStore:
         step.updated_at = datetime.now(UTC)
         run.updated_at = datetime.now(UTC)
         if cost_usage:
-            run.costs.append(cost_usage)
-            self.add_event(
-                run_id,
-                EventType.COST_RECORDED,
-                "LLM usage and estimated cost recorded.",
-                cost_usage.model_dump(mode="json"),
-            )
+            self.record_cost(run_id, cost_usage)
         self.add_event(
             run_id,
             EventType.STEP_COMPLETED,
             f"Step {step.name} completed.",
             {"step_id": step.step_id, "output_summary": output_summary},
+        )
+        return step
+
+    def record_cost(self, run_id: str, cost_usage: CostUsage) -> None:
+        run = self._must_get(run_id)
+        run.costs.append(cost_usage)
+        run.updated_at = datetime.now(UTC)
+        self.add_event(
+            run_id,
+            EventType.COST_RECORDED,
+            "LLM usage and estimated cost recorded.",
+            cost_usage.model_dump(mode="json"),
+        )
+
+    def skip_step(self, run_id: str, step_id: str, reason: str) -> AgentStep:
+        run = self._must_get(run_id)
+        step = self._must_get_step(run, step_id)
+        step.status = StepStatus.SKIPPED
+        step.output_summary = reason
+        step.updated_at = datetime.now(UTC)
+        run.updated_at = datetime.now(UTC)
+        self.add_event(
+            run_id,
+            EventType.STEP_COMPLETED,
+            f"Step {step.name} skipped.",
+            {"step_id": step.step_id, "reason": reason},
         )
         return step
 
@@ -146,6 +167,37 @@ class RunStore:
         run.updated_at = datetime.now(UTC)
         self.add_event(run_id, EventType.ERROR, error, {"step_id": step_id})
         return step
+
+    def save_checkpoint(
+        self,
+        run_id: str,
+        name: str,
+        phase: str,
+        data: dict,
+        step_id: str | None = None,
+    ) -> AgentCheckpoint:
+        run = self._must_get(run_id)
+        checkpoint = AgentCheckpoint(
+            checkpoint_id=new_id("checkpoint"),
+            run_id=run_id,
+            step_id=step_id,
+            name=name,
+            phase=phase,
+            data=data,
+        )
+        run.checkpoints.append(checkpoint)
+        run.updated_at = datetime.now(UTC)
+        self.add_event(
+            run_id,
+            EventType.CHECKPOINT_SAVED,
+            f"Checkpoint {name} saved.",
+            {
+                "checkpoint_id": checkpoint.checkpoint_id,
+                "phase": phase,
+                "step_id": step_id,
+            },
+        )
+        return checkpoint
 
     def add_event(
         self,

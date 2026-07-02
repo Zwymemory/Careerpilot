@@ -1,15 +1,14 @@
 import anyio
+import pytest
 from fastapi.testclient import TestClient
 
-from app.core.config import Settings
-from app.main import app
+from app.core.config import Settings, get_settings
+from app.main import create_app
 from app.schemas.llm import LLMResponse, LLMUsage
 from app.schemas.run import RunState
 from app.services.json_repair import repair_json_object
 from app.services.run_store import run_store
 from app.services.structured_parser import StructuredParserService
-
-client = TestClient(app)
 
 
 class FakeLLMClient:
@@ -29,6 +28,16 @@ class FakeLLMClient:
         )
 
 
+@pytest.fixture
+def client(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LLM_DRY_RUN", "true")
+    monkeypatch.setenv("LLM_API_KEY", "")
+    get_settings.cache_clear()
+    with TestClient(create_app()) as test_client:
+        yield test_client
+    get_settings.cache_clear()
+
+
 def test_json_repair_handles_markdown_fence_and_trailing_comma() -> None:
     repaired = repair_json_object(
         """
@@ -44,7 +53,7 @@ def test_json_repair_handles_markdown_fence_and_trailing_comma() -> None:
     assert "extracted_markdown_json_fence" in repaired.issues
 
 
-def test_parse_resume_returns_profile_and_trace() -> None:
+def test_parse_resume_returns_profile_and_trace(client: TestClient) -> None:
     response = client.post(
         "/api/parsers/resume",
         json={
@@ -73,7 +82,7 @@ def test_parse_resume_returns_profile_and_trace() -> None:
     assert run.steps[0].agent_name == "ResumeParserAgent"
 
 
-def test_parse_job_returns_requirements_and_trace() -> None:
+def test_parse_job_returns_requirements_and_trace(client: TestClient) -> None:
     response = client.post(
         "/api/parsers/job",
         json={
