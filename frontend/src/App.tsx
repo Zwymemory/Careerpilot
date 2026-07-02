@@ -34,6 +34,12 @@ interface CanvasParticle {
   size: number;
   drift: number;
   hue: number;
+  band: number;
+}
+
+function smoothStep(edge0: number, edge1: number, value: number) {
+  const x = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+  return x * x * (3 - 2 * x);
 }
 
 export default function App() {
@@ -70,7 +76,7 @@ export default function App() {
   const completionTimerRef = useRef<number | null>(null);
   const audioLevelRef = useRef(0);
   const particleFieldRef = useRef<CanvasParticle[]>([]);
-  const modelMotionRef = useRef({ busy: false, burstStartedAt: 0 });
+  const modelMotionRef = useRef({ busy: false, burstStartedAt: 0, intensity: 0 });
   const pointerRef = useRef({ x: 0, y: 0, targetX: 0, targetY: 0, scroll: 0 });
 
   async function refreshRuns() {
@@ -252,14 +258,16 @@ export default function App() {
     ];
 
     const seedParticles = () => {
-      const particleCount = 190;
+      const particleCount = 360;
+      const rainbowHues = [354, 28, 48, 132, 190, 226, 278];
       particleFieldRef.current = Array.from({ length: particleCount }, (_, index) => ({
         x: Math.random(),
         y: Math.random(),
         phase: Math.random() * Math.PI * 2 + index * 0.021,
-        size: 0.55 + Math.random() * 1.45,
+        size: 0.65 + Math.random() * 1.65,
         drift: 0.35 + Math.random() * 0.9,
-        hue: 178 + Math.random() * 74,
+        hue: rainbowHues[index % rainbowHues.length],
+        band: index % rainbowHues.length,
       }));
     };
 
@@ -343,58 +351,86 @@ export default function App() {
       context.restore();
 
       const motion = modelMotionRef.current;
-      const burstElapsed = motion.burstStartedAt ? now - motion.burstStartedAt : 1800;
-      const burst = Math.max(0, 1 - burstElapsed / 1200);
-      const busy = motion.busy ? 1 : 0;
+      motion.intensity += ((motion.busy ? 1 : 0) - motion.intensity) * 0.055;
+      const burstElapsed = motion.burstStartedAt ? now - motion.burstStartedAt : 2200;
+      const burstLife = 1800;
+      const burstPhase = Math.max(0, Math.min(1, burstElapsed / burstLife));
+      const burst = Math.max(0, 1 - burstPhase);
+      const busy = motion.intensity;
+      const formation = Math.max(busy, burst);
       const centerX = width * (0.5 + pointer.x * 0.035);
-      const centerY = height * (0.49 + pointer.y * 0.025 - pointer.scroll * 0.04);
+      const centerY = height * (0.56 + pointer.y * 0.025 - pointer.scroll * 0.04);
 
       context.save();
-      context.globalCompositeOperation = "screen";
+      context.globalCompositeOperation = "source-over";
       particleFieldRef.current.forEach((particle, index) => {
-        const orbit = particle.phase + t * (0.12 + busy * 1.5) + index * 0.004;
+        const bandCount = 7;
+        const laneIndex = Math.floor(index / bandCount);
+        const laneCount = Math.ceil(particleFieldRef.current.length / bandCount);
+        const u = laneIndex / Math.max(laneCount - 1, 1);
+        const rainbowAngle = Math.PI * (0.96 - u * 0.86);
+        const bandOffset = particle.band - (bandCount - 1) / 2;
+        const radiusX = width * (0.34 + particle.band * 0.009);
+        const radiusY = height * (0.26 + particle.band * 0.01);
+        const shimmer = Math.sin(t * (1.3 + particle.drift * 0.4) + particle.phase) * (4 + busy * 7);
+        const rainbowX =
+          centerX +
+          Math.cos(rainbowAngle) * radiusX +
+          Math.sin(t * 0.72 + particle.phase) * (5 + busy * 8);
+        const rainbowY =
+          centerY -
+          Math.sin(rainbowAngle) * radiusY +
+          bandOffset * (4.2 + busy * 1.2) +
+          shimmer;
+
+        const orbit = particle.phase + t * (0.16 + busy * 1.9) + index * 0.006;
         const baseX =
           particle.x * width +
-          Math.sin(t * 0.12 * particle.drift + particle.phase) * (18 + audioLift * 16) +
+          Math.sin(t * 0.16 * particle.drift + particle.phase) * (22 + audioLift * 18) +
           pointer.x * 34;
         const baseY =
           particle.y * height +
-          Math.cos(t * 0.1 * particle.drift + particle.phase * 1.4) * (18 + audioLift * 14) +
+          Math.cos(t * 0.13 * particle.drift + particle.phase * 1.4) * (22 + audioLift * 16) +
           pointer.y * 26 +
           pointer.scroll * height * 0.12;
-        const pull = busy * 0.2;
+        const pull = 0.1 + formation * 0.88;
         let x =
           baseX * (1 - pull) +
-          centerX * pull +
-          Math.cos(orbit) * (busy * 80 + audioLift * 22) * particle.drift;
+          rainbowX * pull +
+          Math.cos(orbit) * (busy * 18 + audioLift * 18) * particle.drift;
         let y =
           baseY * (1 - pull) +
-          centerY * pull +
-          Math.sin(orbit * 1.16) * (busy * 58 + audioLift * 18) * particle.drift;
+          rainbowY * pull +
+          Math.sin(orbit * 1.16) * (busy * 14 + audioLift * 16) * particle.drift;
 
         if (burst > 0) {
+          const diagonal = Math.max(0, Math.min(1, (x / width + (height - y) / height) / 2));
+          const sweep = smoothStep(0, 1, (burstPhase - diagonal * 0.46) * 2.1);
+          const scatter = smoothStep(0.42, 1, burstPhase);
           const dx = x - centerX;
           const dy = y - centerY;
           const distance = Math.max(24, Math.hypot(dx, dy));
-          x += (dx / distance) * burst * 240 * particle.drift;
-          y += (dy / distance) * burst * 178 * particle.drift;
+          x += sweep * (width * 0.1 + particle.drift * 68);
+          y -= sweep * (height * 0.08 + particle.drift * 52);
+          x += (dx / distance) * scatter * 230 * particle.drift;
+          y += (dy / distance) * scatter * 180 * particle.drift;
         }
 
         const opacity =
-          0.055 + audioLift * 0.05 + busy * 0.13 + burst * (0.25 + particle.drift * 0.08);
+          0.12 + audioLift * 0.04 + busy * 0.3 + burst * (0.2 + particle.drift * 0.08);
         context.beginPath();
-        context.fillStyle = `hsla(${particle.hue}, 78%, 82%, ${opacity})`;
-        context.arc(x, y, particle.size + busy * 0.75 + burst * 0.7, 0, Math.PI * 2);
+        context.fillStyle = `hsla(${particle.hue}, 88%, ${52 + particle.band * 2}%, ${opacity})`;
+        context.arc(x, y, particle.size + busy * 0.95 + burst * 0.8, 0, Math.PI * 2);
         context.fill();
 
-        if ((index + Math.floor(t * 8)) % 19 === 0) {
+        if ((index + Math.floor(t * 8)) % 23 === 0) {
           context.beginPath();
           context.moveTo(x, y);
           context.lineTo(
-            x + Math.cos(orbit + Math.PI / 2) * (14 + busy * 28),
-            y + Math.sin(orbit + Math.PI / 2) * (12 + busy * 24),
+            x + Math.cos(orbit + Math.PI / 2) * (12 + busy * 34),
+            y + Math.sin(orbit + Math.PI / 2) * (10 + busy * 30),
           );
-          context.strokeStyle = `hsla(${particle.hue}, 82%, 88%, ${0.035 + busy * 0.05 + burst * 0.06})`;
+          context.strokeStyle = `hsla(${particle.hue}, 88%, 58%, ${0.055 + busy * 0.1 + burst * 0.08})`;
           context.lineWidth = 0.8;
           context.stroke();
         }
@@ -699,75 +735,75 @@ export default function App() {
         </div>
       </div>
 
-      <main className="app-shell">
-        <header
-          ref={musicDockRef}
-          className={`minimal-nav glass-surface liftable ${
-            isMusicDockOpen ? "dock-open" : "dock-closed"
-          }`}
-          aria-label="Music dock"
-          onPointerDownCapture={() => {
-            musicDockPointerInsideRef.current = true;
-          }}
-          onPointerUpCapture={() => {
-            window.setTimeout(() => {
+      <header
+        ref={musicDockRef}
+        className={`minimal-nav glass-surface liftable ${
+          isMusicDockOpen ? "dock-open" : "dock-closed"
+        }`}
+        aria-label="Music dock"
+        onPointerDownCapture={() => {
+          musicDockPointerInsideRef.current = true;
+        }}
+        onPointerUpCapture={() => {
+          window.setTimeout(() => {
+            musicDockPointerInsideRef.current = false;
+          }, 350);
+        }}
+        onBlur={(event) => {
+          const currentTarget = event.currentTarget;
+          const nextTarget = event.relatedTarget;
+          if (nextTarget instanceof Node && currentTarget.contains(nextTarget)) {
+            return;
+          }
+
+          const pointerStartedInside = musicDockPointerInsideRef.current;
+          window.setTimeout(() => {
+            if (pointerStartedInside) {
               musicDockPointerInsideRef.current = false;
-            }, 350);
-          }}
-          onBlur={(event) => {
-            const currentTarget = event.currentTarget;
-            const nextTarget = event.relatedTarget;
-            if (nextTarget instanceof Node && currentTarget.contains(nextTarget)) {
               return;
             }
-
-            const pointerStartedInside = musicDockPointerInsideRef.current;
-            window.setTimeout(() => {
-              if (pointerStartedInside) {
-                musicDockPointerInsideRef.current = false;
-                return;
-              }
-              if (currentTarget.contains(document.activeElement)) {
-                return;
-              }
-              setIsMusicDockOpen(false);
-            }, 0);
-          }}
+            if (currentTarget.contains(document.activeElement)) {
+              return;
+            }
+            setIsMusicDockOpen(false);
+          }, 0);
+        }}
+      >
+        <button
+          className="nav-collapsed"
+          type="button"
+          onFocus={() => setIsMusicDockOpen(true)}
+          onClick={() => setIsMusicDockOpen(true)}
+          aria-label="Open music dock"
+          aria-expanded={isMusicDockOpen}
         >
-          <button
-            className="nav-collapsed"
-            type="button"
-            onFocus={() => setIsMusicDockOpen(true)}
-            onClick={() => setIsMusicDockOpen(true)}
-            aria-label="Open music dock"
-            aria-expanded={isMusicDockOpen}
-          >
-            <span className={isPlaying ? "nav-orb nav-orb-on" : "nav-orb"}>♪</span>
-          </button>
-          <div className="nav-expanded" aria-hidden={!isMusicDockOpen}>
-            <div className="nav-title">
-              <p className="eyebrow">Music Dock</p>
-              <h1>Run Trace Studio</h1>
-              <p className="nav-track">{audioName}</p>
-            </div>
-            <div className="nav-actions">
-              <label className="icon-pill liftable" title="Choose local audio">
-                <span aria-hidden="true">♪</span>
-                <input type="file" accept="audio/*" onChange={handleAudioChange} />
-              </label>
-              <button
-                className="icon-pill liftable"
-                type="button"
-                onClick={toggleAudio}
-                disabled={audioName === "No track"}
-                title={isPlaying ? "Pause audio" : "Play audio"}
-              >
-                {isPlaying ? "Ⅱ" : "▶"}
-              </button>
-            </div>
+          <span className={isPlaying ? "nav-orb nav-orb-on" : "nav-orb"}>♪</span>
+        </button>
+        <div className="nav-expanded" aria-hidden={!isMusicDockOpen}>
+          <div className="nav-title">
+            <p className="eyebrow">Music Dock</p>
+            <h1>Run Trace Studio</h1>
+            <p className="nav-track">{audioName}</p>
           </div>
-        </header>
+          <div className="nav-actions">
+            <label className="icon-pill liftable" title="Choose local audio">
+              <span aria-hidden="true">♪</span>
+              <input type="file" accept="audio/*" onChange={handleAudioChange} />
+            </label>
+            <button
+              className="icon-pill liftable"
+              type="button"
+              onClick={toggleAudio}
+              disabled={audioName === "No track"}
+              title={isPlaying ? "Pause audio" : "Play audio"}
+            >
+              {isPlaying ? "Ⅱ" : "▶"}
+            </button>
+          </div>
+        </div>
+      </header>
 
+      <main className="app-shell">
         <section className="hero-workspace">
           <div className="hero-copy revealable reveal-once reveal-delay-1" ref={heroCopyRef}>
             <p className="eyebrow">我在听，CareerPilot</p>

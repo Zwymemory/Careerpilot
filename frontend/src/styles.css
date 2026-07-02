@@ -477,11 +477,11 @@ button:disabled {
 }
 
 .minimal-nav {
-  --dock-corner-right: max(18px, calc((100vw - 1180px) / 2 - 84px));
+  --dock-right: clamp(28px, 4.5vw, 86px);
   position: fixed;
-  top: 22px;
+  top: clamp(22px, 3vw, 36px);
   right: auto;
-  left: calc(100% - var(--dock-corner-right) - 62px);
+  left: calc(100vw - var(--dock-right) - 62px);
   display: grid;
   place-items: center;
   width: 62px;
@@ -539,6 +539,12 @@ button:disabled {
   backdrop-filter: blur(32px) saturate(1.32) brightness(1.03);
   -webkit-backdrop-filter: blur(32px) saturate(1.32) brightness(1.03);
   transform: translateX(-50%);
+}
+
+.minimal-nav.glass-surface.dock-closed {
+  right: auto;
+  left: calc(100vw - var(--dock-right) - 62px);
+  transform: translate3d(0, 0, 0);
 }
 
 .minimal-nav.glass-surface.dock-closed:hover {
