@@ -221,10 +221,10 @@ button:disabled {
 
 .command-dock.liftable:hover {
   box-shadow:
-    0 28px 76px rgba(46, 98, 126, 0.15),
-    0 13px 28px rgba(43, 67, 88, 0.09),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78);
-  transform: translate3d(0, -4px, 0) rotateX(0.32deg);
+    0 24px 62px rgba(46, 98, 126, 0.13),
+    0 12px 26px rgba(43, 67, 88, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  transform: translate3d(0, -3px, 0) rotateX(0.18deg);
 }
 
 .metric:nth-child(1):hover {
@@ -586,51 +586,140 @@ h3 {
 .command-dock {
   align-self: end;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: stretch;
-  gap: 14px;
-  width: min(840px, 100%);
+  grid-template-columns: 44px minmax(0, 1fr) 48px;
+  align-items: end;
+  gap: 10px;
+  width: min(820px, 100%);
+  min-height: 64px;
   margin-top: clamp(76px, 10vh, 116px);
-  padding: 12px;
-  border-color: rgba(255, 255, 255, 0.62);
+  padding: 10px 10px 10px 14px;
+  border-radius: 34px;
+  border-color: rgba(255, 255, 255, 0.7);
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.18)),
-    rgba(255, 255, 255, 0.2);
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.72), transparent 38%),
+    radial-gradient(circle at 95% 82%, rgba(105, 196, 211, 0.2), transparent 46%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.22)),
+    rgba(255, 255, 255, 0.24);
   box-shadow:
-    0 22px 64px rgba(48, 90, 118, 0.11),
-    0 8px 22px rgba(43, 67, 88, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    0 24px 66px rgba(48, 90, 118, 0.1),
+    0 9px 22px rgba(43, 67, 88, 0.055),
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.34);
+  backdrop-filter: blur(34px) saturate(1.28) brightness(1.04);
+  -webkit-backdrop-filter: blur(34px) saturate(1.28) brightness(1.04);
   animation: surface-enter 860ms cubic-bezier(0.18, 0.86, 0.3, 1) 260ms both;
 }
 
-textarea {
-  width: 100%;
-  min-height: 86px;
-  resize: vertical;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  border-radius: 8px;
-  outline: 0;
-  padding: 17px 18px;
-  color: #172b3a;
+.command-dock.glass-surface::before {
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.14)),
-    rgba(255, 255, 255, 0.2);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.64),
-    inset 0 -16px 42px rgba(85, 158, 185, 0.04);
-  line-height: 1.58;
-  transition:
-    border-color 220ms ease,
-    background 220ms ease,
-    box-shadow 220ms ease;
+    linear-gradient(100deg, rgba(255, 255, 255, 0.7), transparent 42%),
+    radial-gradient(circle at 82% 18%, rgba(255, 255, 255, 0.36), transparent 28%);
+  opacity: 0.62;
 }
 
-textarea:focus {
-  border-color: rgba(73, 157, 178, 0.4);
+.command-dock.glass-surface::after {
+  background-image:
+    radial-gradient(circle at 26% 22%, rgba(255, 255, 255, 0.34) 0 1px, transparent 1.2px),
+    linear-gradient(118deg, transparent 0 48%, rgba(255, 255, 255, 0.14) 49% 51%, transparent 52% 100%);
+  background-size:
+    10px 10px,
+    92px 92px;
+  opacity: 0.12;
+}
+
+.goal-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  max-height: 156px;
+  resize: none;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  padding: 10px 4px;
+  color: #172b3a;
+  background: transparent;
+  box-shadow: none;
+  caret-color: #10293a;
+  font-size: 16px;
+  font-weight: 520;
+  line-height: 28px;
+  scrollbar-width: thin;
+  transition:
+    color 220ms ease,
+    opacity 220ms ease;
+}
+
+.goal-input::placeholder {
+  color: rgba(38, 60, 76, 0.48);
+}
+
+.goal-input:focus {
+  color: #10293a;
+}
+
+.composer-icon,
+.composer-send {
+  display: inline-grid;
+  place-items: center;
+  align-self: end;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 999px;
+}
+
+.composer-icon {
+  color: #10293a;
+  background: transparent;
+  box-shadow: none;
+  font-size: 31px;
+  font-weight: 310;
+  line-height: 1;
+}
+
+.composer-icon:hover {
+  background: rgba(255, 255, 255, 0.26);
   box-shadow:
-    0 0 0 3px rgba(70, 159, 179, 0.12),
-    0 14px 34px rgba(43, 94, 116, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    0 9px 24px rgba(54, 96, 122, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transform: translate3d(0, -1px, 0);
+}
+
+.composer-send {
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 32% 22%, rgba(255, 255, 255, 0.2), transparent 28%),
+    #071017;
+  box-shadow:
+    0 14px 30px rgba(11, 29, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  font-size: 25px;
+  font-weight: 780;
+  line-height: 1;
+}
+
+.composer-send span {
+  transform: translateY(-2px);
+}
+
+.composer-send.liftable:hover:not(:disabled) {
+  background:
+    radial-gradient(circle at 32% 22%, rgba(255, 255, 255, 0.26), transparent 28%),
+    #08141d;
+  box-shadow:
+    0 18px 38px rgba(11, 29, 42, 0.2),
+    0 7px 15px rgba(36, 77, 92, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transform: translate3d(0, -2px, 0) rotateX(0.16deg);
+}
+
+.composer-send:disabled {
+  background:
+    radial-gradient(circle at 32% 22%, rgba(255, 255, 255, 0.2), transparent 28%),
+    rgba(20, 37, 49, 0.48);
 }
 
 .pulse-dot {
@@ -1140,7 +1229,6 @@ dd {
     font-size: 24px;
   }
 
-  .command-dock,
   .insight-strip,
   .trace-layout,
   .cost-grid,
@@ -1149,11 +1237,13 @@ dd {
   }
 
   .command-dock {
+    grid-template-columns: 42px minmax(0, 1fr) 44px;
     margin-top: 48px;
+    padding: 9px 9px 9px 12px;
   }
 
-  textarea {
-    min-height: 96px;
+  .goal-input {
+    min-height: 46px;
   }
 
   .primary-action {

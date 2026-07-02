@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { createRun, listRuns } from "./api/client";
 import { RunTrace } from "./components/RunTrace";
@@ -19,6 +19,7 @@ export default function App() {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const musicDockRef = useRef<HTMLElement | null>(null);
   const heroCopyRef = useRef<HTMLDivElement | null>(null);
+  const goalInputRef = useRef<HTMLTextAreaElement | null>(null);
   const flowCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -33,6 +34,18 @@ export default function App() {
     const data = await listRuns();
     setRuns(data);
   }
+
+  useLayoutEffect(() => {
+    const input = goalInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.style.height = "auto";
+    const nextHeight = Math.min(input.scrollHeight, 156);
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = input.scrollHeight > 156 ? "auto" : "hidden";
+  }, [goal]);
 
   useEffect(() => {
     refreshRuns().catch((err: unknown) => {
@@ -253,10 +266,15 @@ export default function App() {
   }, []);
 
   async function handleCreateRun() {
+    const runGoal = goal.trim();
+    if (!runGoal || isLoading) {
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const detail = await createRun(goal);
+      const detail = await createRun(runGoal);
       setActiveRun(detail);
       await refreshRuns();
     } catch (err) {
@@ -398,15 +416,40 @@ export default function App() {
           </div>
 
           <div className="command-dock glass-surface liftable revealable reveal-delay-2">
+            <button
+              className="composer-icon composer-plus"
+              type="button"
+              aria-label="Focus run goal"
+              title="Focus run goal"
+              onClick={() => goalInputRef.current?.focus()}
+            >
+              <span aria-hidden="true">+</span>
+            </button>
             <textarea
+              ref={goalInputRef}
+              className="goal-input"
               aria-label="Run goal"
+              placeholder="描述这次 Agent 运行目标"
               value={goal}
               onChange={(event) => setGoal(event.target.value)}
-              rows={3}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+                  return;
+                }
+                event.preventDefault();
+                void handleCreateRun();
+              }}
+              rows={1}
             />
-            <button className="primary-action liftable" type="button" onClick={handleCreateRun} disabled={isLoading}>
-              <span aria-hidden="true">↗</span>
-              {isLoading ? "Starting" : "Start run"}
+            <button
+              className="composer-send liftable"
+              type="button"
+              onClick={handleCreateRun}
+              disabled={isLoading || !goal.trim()}
+              aria-label={isLoading ? "Starting run" : "Start run"}
+              title={isLoading ? "Starting" : "Start run"}
+            >
+              <span aria-hidden="true">{isLoading ? "…" : "↑"}</span>
             </button>
           </div>
 
