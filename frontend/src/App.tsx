@@ -15,6 +15,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [audioName, setAudioName] = useState("No track");
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isMusicDockOpen, setIsMusicDockOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const flowCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -310,11 +311,22 @@ export default function App() {
       <audio ref={audioRef} onEnded={() => setIsPlaying(false)} />
 
       <main className="app-shell">
-        <header className="minimal-nav glass-surface liftable revealable reveal-delay-0" tabIndex={0} aria-label="Music dock">
-          <div className="nav-collapsed" aria-hidden="true">
+        <header
+          className={`minimal-nav glass-surface liftable ${
+            isMusicDockOpen ? "dock-open" : "dock-closed"
+          }`}
+          aria-label="Music dock"
+        >
+          <button
+            className="nav-collapsed"
+            type="button"
+            onClick={() => setIsMusicDockOpen(true)}
+            aria-label="Open music dock"
+            aria-expanded={isMusicDockOpen}
+          >
             <span className={isPlaying ? "nav-orb nav-orb-on" : "nav-orb"}>♪</span>
-          </div>
-          <div className="nav-expanded">
+          </button>
+          <div className="nav-expanded" aria-hidden={!isMusicDockOpen}>
             <div className="nav-title">
               <p className="eyebrow">Music Dock</p>
               <h1>Run Trace Studio</h1>
@@ -333,6 +345,18 @@ export default function App() {
                 title={isPlaying ? "Pause audio" : "Play audio"}
               >
                 {isPlaying ? "Ⅱ" : "▶"}
+              </button>
+              <button
+                className="icon-pill liftable dock-collapse-button"
+                type="button"
+                onClick={(event) => {
+                  event.currentTarget.blur();
+                  setIsMusicDockOpen(false);
+                }}
+                title="Send music dock to corner"
+                aria-label="Collapse music dock"
+              >
+                ↗
               </button>
             </div>
           </div>
