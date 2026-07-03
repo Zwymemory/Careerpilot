@@ -35,6 +35,8 @@ interface CanvasParticle {
   drift: number;
   hue: number;
   band: number;
+  mist: number;
+  depth: number;
 }
 
 function smoothStep(edge0: number, edge1: number, value: number) {
@@ -258,17 +260,30 @@ export default function App() {
     ];
 
     const seedParticles = () => {
-      const particleCount = 360;
+      const particleCount = window.innerWidth > 1440 ? 1180 : 940;
       const rainbowHues = [354, 28, 48, 132, 190, 226, 278];
-      particleFieldRef.current = Array.from({ length: particleCount }, (_, index) => ({
-        x: Math.random(),
-        y: Math.random(),
-        phase: Math.random() * Math.PI * 2 + index * 0.021,
-        size: 0.65 + Math.random() * 1.65,
-        drift: 0.35 + Math.random() * 0.9,
-        hue: rainbowHues[index % rainbowHues.length],
-        band: index % rainbowHues.length,
-      }));
+      particleFieldRef.current = Array.from({ length: particleCount }, (_, index) => {
+        const flow = Math.random();
+        const isCloudParticle = Math.random() < 0.84;
+        const ribbonX = 0.08 + flow * 0.9 + (Math.random() - 0.5) * 0.22;
+        const ribbonY =
+          0.49 +
+          Math.sin(flow * Math.PI * 2.15 + 0.58) * 0.18 +
+          Math.cos(flow * Math.PI * 3.4) * 0.06 +
+          (Math.random() - 0.5) * 0.28;
+
+        return {
+          x: isCloudParticle ? ribbonX : -0.1 + Math.random() * 1.2,
+          y: isCloudParticle ? ribbonY : -0.08 + Math.random() * 1.16,
+          phase: Math.random() * Math.PI * 2 + index * 0.017,
+          size: 0.22 + Math.random() * 0.68,
+          drift: 0.32 + Math.random() * 1.1,
+          hue: rainbowHues[index % rainbowHues.length],
+          band: index % rainbowHues.length,
+          mist: isCloudParticle ? 0.66 + Math.random() * 0.34 : 0.18 + Math.random() * 0.24,
+          depth: 0.42 + Math.random() * 0.76,
+        };
+      });
     };
 
     const resize = () => {
@@ -394,16 +409,16 @@ export default function App() {
         const orbit = particle.phase + t * (0.16 + busy * 1.9 + idleAudio * 0.9) + index * 0.006;
         const baseX =
           particle.x * width +
-          Math.sin(t * 0.16 * particle.drift + particle.phase) * (22 + idlePulse * 34) +
-          Math.sin(t * 2.2 + particle.phase * 1.8) * idlePulse * 18 +
-          pointer.x * 34;
+          Math.sin(t * 0.16 * particle.drift + particle.phase) * (28 + idlePulse * 38) +
+          Math.sin(t * 2.2 + particle.phase * 1.8) * idlePulse * 20 +
+          pointer.x * (32 + particle.depth * 18);
         const baseY =
           particle.y * height +
-          Math.cos(t * 0.13 * particle.drift + particle.phase * 1.4) * (22 + idlePulse * 28) +
-          Math.cos(t * 2.0 + particle.phase * 1.6) * idlePulse * 14 +
-          pointer.y * 26 +
+          Math.cos(t * 0.13 * particle.drift + particle.phase * 1.4) * (30 + idlePulse * 34) +
+          Math.cos(t * 2.0 + particle.phase * 1.6) * idlePulse * 16 +
+          pointer.y * (24 + particle.depth * 16) +
           pointer.scroll * height * 0.12;
-        const pull = 0.1 + formation * 0.88;
+        const pull = 0.035 + formation * 0.945;
         let x =
           baseX * (1 - pull) +
           rainbowX * pull +
@@ -427,29 +442,39 @@ export default function App() {
         }
 
         const opacity =
-          0.12 +
-          idleBreath * 0.055 +
-          idleFlicker * (0.028 + idleAudio * 0.16) +
-          busy * 0.3 +
-          burst * (0.2 + particle.drift * 0.08);
+          0.035 +
+          particle.mist * 0.032 +
+          idleBreath * 0.026 +
+          idleFlicker * (0.012 + idleAudio * 0.085) +
+          busy * 0.24 +
+          burst * (0.15 + particle.drift * 0.06);
         const particleRadius =
-          particle.size * (1 + idleBreath * 0.22 + idlePulse * 0.58) + busy * 0.95 + burst * 0.8;
+          particle.size * (1 + idleBreath * 0.18 + idlePulse * 0.42) + busy * 0.68 + burst * 0.54;
         context.beginPath();
-        context.fillStyle = `hsla(${particle.hue}, 88%, ${50 + particle.band * 2}%, ${opacity})`;
+        context.fillStyle = `hsla(${particle.hue}, 82%, ${54 + particle.band * 2}%, ${opacity})`;
         context.arc(x, y, particleRadius, 0, Math.PI * 2);
         context.fill();
 
-        if ((index + Math.floor(t * 8)) % 23 === 0) {
+        if (formation < 0.24 && index % 37 === 0) {
+          const fogRadius = (18 + idleAudio * 28) * particle.depth;
+          const fog = context.createRadialGradient(x, y, 0, x, y, fogRadius);
+          fog.addColorStop(0, `hsla(${particle.hue}, 68%, 74%, ${0.025 * particle.mist})`);
+          fog.addColorStop(1, `hsla(${particle.hue}, 68%, 74%, 0)`);
+          context.fillStyle = fog;
+          context.fillRect(x - fogRadius, y - fogRadius, fogRadius * 2, fogRadius * 2);
+        }
+
+        if ((index + Math.floor(t * 8)) % 43 === 0) {
           context.beginPath();
           context.moveTo(x, y);
           context.lineTo(
-            x + Math.cos(orbit + Math.PI / 2) * (12 + busy * 34),
-            y + Math.sin(orbit + Math.PI / 2) * (10 + busy * 30),
+            x + Math.cos(orbit + Math.PI / 2) * (9 + busy * 30),
+            y + Math.sin(orbit + Math.PI / 2) * (8 + busy * 26),
           );
           context.strokeStyle = `hsla(${particle.hue}, 88%, 58%, ${
-            0.055 + idleAudio * 0.12 + busy * 0.1 + burst * 0.08
+            0.028 + idleAudio * 0.08 + busy * 0.09 + burst * 0.065
           })`;
-          context.lineWidth = 0.8;
+          context.lineWidth = 0.55;
           context.stroke();
         }
       });
