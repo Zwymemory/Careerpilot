@@ -166,8 +166,8 @@ class MatchingAgent:
                 MatchGap(
                     requirement=requirement,
                     severity=severity,
-                    reason=f"Only {round(score.score * 100)}% of requirement terms are supported.",
-                    suggested_action=f"Add truthful resume evidence for: {missing}.",
+                    reason=f"当前简历证据只覆盖该要求约 {round(score.score * 100)}%。",
+                    suggested_action=f"如果真实具备，请补充能够证明这些信号的项目或经历：{missing}。",
                 )
             )
 
@@ -180,15 +180,13 @@ class MatchingAgent:
                 continue
             gaps.append(
                 MatchGap(
-                    requirement=f"Missing hard keyword: {keyword}",
+                    requirement=f"硬性关键词缺失：{keyword}",
                     severity="high",
                     reason=(
-                        "The JD treats this keyword as a core requirement, but it is absent "
-                        "from resume evidence."
+                        "JD 将该关键词视为核心要求，但当前简历证据中没有稳定出现。"
                     ),
                     suggested_action=(
-                        "If truthful, add a concrete project or experience bullet that proves "
-                        f"{keyword}."
+                        f"如果真实具备，请补充一条可以证明 {keyword} 的具体项目或经历。"
                     ),
                 )
             )
@@ -198,18 +196,14 @@ class MatchingAgent:
             if score.score < 0.5:
                 gaps.append(
                     MatchGap(
-                        requirement=requirement,
-                        severity="low",
-                        reason=(
-                            f"Only {round(score.score * 100)}% of this supporting signal is "
-                            "covered."
-                        ),
-                        suggested_action=(
-                            "Consider adding concise supporting evidence if it matches real "
-                            "experience."
-                        ),
-                    )
+                    requirement=requirement,
+                    severity="low",
+                    reason=f"当前简历证据只覆盖该加分信号约 {round(score.score * 100)}%。",
+                    suggested_action=(
+                        "如果符合真实经历，可以补充一句精简证据；否则保持为空，避免虚构。"
+                    ),
                 )
+            )
         return gaps[:8]
 
     def _build_priorities(
@@ -236,7 +230,7 @@ class MatchingAgent:
                 MatchPriority(
                     item=keyword,
                     priority="P0" if keyword.lower() in hard_text else "P1",
-                    reason="Missing keyword from the current resume profile.",
+                    reason="当前简历画像缺少这个关键词。",
                 )
             )
         priority_order = {"P0": 0, "P1": 1, "P2": 2}
@@ -406,14 +400,14 @@ def _unique_evidence(items: list[EvidenceItem]) -> list[EvidenceItem]:
 
 def _summary(score: float, mapping_count: int, gap_count: int) -> str:
     if score >= 80:
-        fit = "strong"
+        fit = "匹配度较高"
     elif score >= 60:
-        fit = "promising"
+        fit = "有潜力的匹配"
     elif score >= 40:
-        fit = "partial"
+        fit = "部分匹配"
     else:
-        fit = "weak"
+        fit = "匹配较弱"
     return (
-        f"{fit.capitalize()} match: {score:.2f}/100 with {mapping_count} evidence mappings "
-        f"and {gap_count} prioritized gap(s)."
+        f"{fit}：{score:.2f}/100，包含 {mapping_count} 条证据映射和 "
+        f"{gap_count} 个优先缺口。"
     )

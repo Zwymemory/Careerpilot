@@ -27,13 +27,14 @@ import type {
 const defaultGoal =
   "为 AI Agent 实习岗位生成可追踪运行计划，保留人工审批点和成本记录。";
 const defaultResumeText =
-  "Education: Example University\nSkills: Python, FastAPI, React\nProject: CareerPilot built a traceable Agent workflow.";
+  "教育经历：示例大学，计算机科学与技术本科。\n技能：Python、FastAPI、React、TypeScript、PostgreSQL、Redis、Docker、LLM、AI Agent、RAG、Function Calling。\n项目：CareerPilot 是一个可追踪 AI Agent Workflow Platform，使用 FastAPI 和 React 实现 Run Trace、Checkpoint、成本记录、人工审批、匹配分析和简历改写草稿。";
 const defaultJobText =
-  "Company: Example AI\nTitle: AI Agent Backend Intern\nRequired: Python, FastAPI, SQL\nPreferred: React, TypeScript";
+  "公司：示例 AI\n岗位名称：AI Agent 全栈开发工程师\n硬性要求：Python、FastAPI、SQL、REST API、Agent 工作流、Function Calling\n加分项：React、TypeScript、RAG、Redis、Docker、Pydantic、可视化交互";
 
 type WorkflowAction =
   | "resume-parser"
   | "job-parser"
+  | "intake-analysis"
   | "match-agent"
   | "rewrite-draft"
   | "rewrite-approval"
@@ -78,7 +79,7 @@ export default function App() {
   const [completionPulse, setCompletionPulse] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [audioName, setAudioName] = useState("No track");
+  const [audioName, setAudioName] = useState("未选择音乐");
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMusicDockOpen, setIsMusicDockOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -142,7 +143,7 @@ export default function App() {
 
   useEffect(() => {
     refreshRuns().catch((err: unknown) => {
-      setError(err instanceof Error ? err.message : "Failed to load runs.");
+      setError(err instanceof Error ? err.message : "运行记录加载失败。");
     });
   }, []);
 
@@ -593,7 +594,7 @@ export default function App() {
       await refreshRuns();
       markRequestComplete();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create run.");
+      setError(err instanceof Error ? err.message : "创建运行失败。");
     } finally {
       setIsLoading(false);
     }
@@ -602,7 +603,7 @@ export default function App() {
   async function handleParseResume() {
     const text = resumeText.trim();
     if (text.length < 10 || workflowAction) {
-      setWorkflowError("Resume text needs at least 10 characters.");
+      setWorkflowError("简历文本至少需要 10 个字符。");
       return;
     }
 
@@ -618,7 +619,7 @@ export default function App() {
       await refreshRuns();
       markRequestComplete();
     } catch (err) {
-      setWorkflowError(err instanceof Error ? err.message : "Resume parser failed.");
+      setWorkflowError(err instanceof Error ? err.message : "简历解析失败。");
     } finally {
       setWorkflowAction(null);
     }
@@ -627,7 +628,7 @@ export default function App() {
   async function handleParseJob() {
     const text = jobText.trim();
     if (text.length < 10 || workflowAction) {
-      setWorkflowError("Job description needs at least 10 characters.");
+      setWorkflowError("岗位 JD 至少需要 10 个字符。");
       return;
     }
 
@@ -643,7 +644,40 @@ export default function App() {
       await refreshRuns();
       markRequestComplete();
     } catch (err) {
-      setWorkflowError(err instanceof Error ? err.message : "Job parser failed.");
+      setWorkflowError(err instanceof Error ? err.message : "JD 解析失败。");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleAnalyzeIntake() {
+    const resume = resumeText.trim();
+    const job = jobText.trim();
+    if (workflowAction) {
+      return;
+    }
+    if (resume.length < 10 || job.length < 10) {
+      setWorkflowError("请先补充真实经历和目标岗位 JD，每段至少 10 个字符。");
+      return;
+    }
+
+    setWorkflowAction("intake-analysis");
+    setWorkflowError(null);
+    clearCompletionPulse();
+    try {
+      const [parsedResume, parsedJob] = await Promise.all([
+        parseResume(resume),
+        parseJob(job)
+      ]);
+      setResumeResult(parsedResume);
+      setJobResult(parsedJob);
+      setMatchResult(null);
+      setRewriteResult(null);
+      await showRun(parsedJob.run_id);
+      await refreshRuns();
+      markRequestComplete();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "材料解析失败。");
     } finally {
       setWorkflowAction(null);
     }
@@ -654,7 +688,7 @@ export default function App() {
     const resume = resumeText.trim();
     const job = jobText.trim();
     if (!runGoal || (!resume && !job) || workflowAction) {
-      setWorkflowError("LoopEngine needs a goal and at least one resume/JD input.");
+      setWorkflowError("LoopEngine 需要运行目标，并且至少需要一段简历或 JD 输入。");
       return;
     }
 
@@ -671,7 +705,7 @@ export default function App() {
       await refreshRuns();
       markRequestComplete();
     } catch (err) {
-      setWorkflowError(err instanceof Error ? err.message : "LoopEngine run failed.");
+      setWorkflowError(err instanceof Error ? err.message : "LoopEngine 运行失败。");
     } finally {
       setWorkflowAction(null);
     }
@@ -679,7 +713,7 @@ export default function App() {
 
   async function handleRunMatch() {
     if (!resumeResult || !jobResult || workflowAction) {
-      setWorkflowError("MatchAgent needs both a parsed resume profile and a parsed JD profile.");
+      setWorkflowError("MatchAgent 需要先完成简历解析和 JD 解析。");
       return;
     }
 
@@ -697,7 +731,7 @@ export default function App() {
       await refreshRuns();
       markRequestComplete();
     } catch (err) {
-      setWorkflowError(err instanceof Error ? err.message : "MatchAgent failed.");
+      setWorkflowError(err instanceof Error ? err.message : "MatchAgent 匹配失败。");
     } finally {
       setWorkflowAction(null);
     }
@@ -705,7 +739,7 @@ export default function App() {
 
   async function handleCreateRewriteDraft() {
     if (!resumeResult || !jobResult || !matchResult || workflowAction) {
-      setWorkflowError("ResumeRewriteAgent needs parsed resume, parsed JD, and a W4 match result.");
+      setWorkflowError("ResumeRewriteAgent 需要先完成 W2 解析和 W4 匹配。");
       return;
     }
 
@@ -723,7 +757,7 @@ export default function App() {
       await refreshRuns();
       markRequestComplete();
     } catch (err) {
-      setWorkflowError(err instanceof Error ? err.message : "ResumeRewriteAgent failed.");
+      setWorkflowError(err instanceof Error ? err.message : "ResumeRewriteAgent 生成草稿失败。");
     } finally {
       setWorkflowAction(null);
     }
@@ -754,7 +788,7 @@ export default function App() {
       await refreshRuns();
       markRequestComplete();
     } catch (err) {
-      setWorkflowError(err instanceof Error ? err.message : "Rewrite approval failed.");
+      setWorkflowError(err instanceof Error ? err.message : "改写草稿审批失败。");
     } finally {
       setWorkflowAction(null);
     }
@@ -776,7 +810,7 @@ export default function App() {
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setWorkflowError(err instanceof Error ? err.message : "PDF export failed.");
+      setWorkflowError(err instanceof Error ? err.message : "PDF 导出失败。");
     } finally {
       setWorkflowAction(null);
     }
@@ -797,7 +831,7 @@ export default function App() {
       await refreshRuns();
       markRequestComplete();
     } catch (err) {
-      setWorkflowError(err instanceof Error ? err.message : "Approval failed.");
+      setWorkflowError(err instanceof Error ? err.message : "审批失败。");
     } finally {
       setWorkflowAction(null);
     }
@@ -817,7 +851,7 @@ export default function App() {
       await refreshRuns();
       markRequestComplete();
     } catch (err) {
-      setWorkflowError(err instanceof Error ? err.message : "Resume failed.");
+      setWorkflowError(err instanceof Error ? err.message : "恢复运行失败。");
     } finally {
       setWorkflowAction(null);
     }
@@ -933,7 +967,7 @@ export default function App() {
         <div className="boot-card">
           <span className="boot-flower" />
           <span className="boot-mark">CareerPilot</span>
-          <span className="boot-submark">Agent · Trace · Studio</span>
+          <span className="boot-submark">Agent · 轨迹 · Studio</span>
           <span
             className="boot-center-line"
             style={{ "--boot-progress": `${bootProgress}%` } as React.CSSProperties}
@@ -942,7 +976,7 @@ export default function App() {
           </span>
         </div>
         <div className="boot-rail boot-rail-bottom">
-          <span>LOADING</span>
+          <span>加载中</span>
           <i style={{ "--boot-progress": `${bootProgress}%` } as React.CSSProperties}>
             <b />
           </i>
@@ -955,7 +989,7 @@ export default function App() {
         className={`minimal-nav glass-surface liftable ${
           isMusicDockOpen ? "dock-open" : "dock-closed"
         }`}
-        aria-label="Music dock"
+        aria-label="音乐区"
         onPointerDownCapture={() => {
           musicDockPointerInsideRef.current = true;
         }}
@@ -989,19 +1023,19 @@ export default function App() {
           type="button"
           onFocus={() => setIsMusicDockOpen(true)}
           onClick={() => setIsMusicDockOpen(true)}
-          aria-label="Open music dock"
+          aria-label="打开音乐区"
           aria-expanded={isMusicDockOpen}
         >
           <span className={isPlaying ? "nav-orb nav-orb-on" : "nav-orb"}>♪</span>
         </button>
         <div className="nav-expanded" aria-hidden={!isMusicDockOpen}>
           <div className="nav-title">
-            <p className="eyebrow">Music Dock</p>
-            <h1>Run Trace Studio</h1>
+            <p className="eyebrow">音乐区</p>
+            <h1>求职材料工作台</h1>
             <p className="nav-track">{audioName}</p>
           </div>
           <div className="nav-actions">
-            <label className="icon-pill liftable" title="Choose local audio">
+            <label className="icon-pill liftable" title="选择本地音乐">
               <span aria-hidden="true">♪</span>
               <input type="file" accept="audio/*" onChange={handleAudioChange} />
             </label>
@@ -1009,8 +1043,8 @@ export default function App() {
               className="icon-pill liftable"
               type="button"
               onClick={toggleAudio}
-              disabled={audioName === "No track"}
-              title={isPlaying ? "Pause audio" : "Play audio"}
+              disabled={audioName === "未选择音乐"}
+              title={isPlaying ? "暂停音乐" : "播放音乐"}
             >
               {isPlaying ? "Ⅱ" : "▶"}
             </button>
@@ -1022,15 +1056,19 @@ export default function App() {
         <section className="hero-workspace">
           <div className="hero-copy revealable reveal-once reveal-delay-1" ref={heroCopyRef}>
             <p className="eyebrow">我在听，CareerPilot</p>
-            <h2>Agent の 轨迹。</h2>
+            <h2>把真实经历，变成可投递的岗位叙事。</h2>
+            <p>
+              输入你的真实能力和目标实习 JD，CareerPilot 会拆解岗位、匹配证据、
+              标出能力缺口，并生成需要人工确认的中文简历改写稿。
+            </p>
           </div>
 
           <div className="command-dock glass-surface liftable revealable reveal-delay-2">
             <button
               className="composer-icon composer-plus"
               type="button"
-              aria-label="Focus run goal"
-              title="Focus run goal"
+              aria-label="聚焦运行目标"
+              title="聚焦运行目标"
               onClick={() => goalInputRef.current?.focus()}
             >
               <span aria-hidden="true">+</span>
@@ -1038,7 +1076,7 @@ export default function App() {
             <textarea
               ref={goalInputRef}
               className="goal-input"
-              aria-label="Run goal"
+              aria-label="运行目标"
               placeholder="描述这次 Agent 运行目标"
               value={goal}
               onChange={(event) => setGoal(event.target.value)}
@@ -1056,8 +1094,8 @@ export default function App() {
               type="button"
               onClick={handleCreateRun}
               disabled={isLoading || !goal.trim()}
-              aria-label={isLoading ? "Starting run" : "Start run"}
-              title={isLoading ? "Starting" : "Start run"}
+              aria-label={isLoading ? "正在创建运行" : "创建运行"}
+              title={isLoading ? "正在创建" : "创建运行"}
             >
               <span aria-hidden="true">{isLoading ? "…" : "↑"}</span>
             </button>
@@ -1067,24 +1105,69 @@ export default function App() {
         </section>
 
         <section className="insight-strip">
-          <Metric label="Runs" value={runs.length.toString()} />
-          <Metric label="State" value={formatState(latestState)} />
-          <Metric label="Tokens" value={latestTokens.toString()} />
-          <Metric label="Cost CNY" value={totalCost.toFixed(6)} />
+          <Metric label="运行次数" value={runs.length.toString()} />
+          <Metric label="状态" value={formatState(latestState)} />
+          <Metric label="Token" value={latestTokens.toString()} />
+          <Metric label="成本 CNY" value={totalCost.toFixed(6)} />
         </section>
 
-        <section className="workflow-board">
-          <section className="workflow-panel scroll-fade glass-surface liftable">
+        <section className="product-journey glass-surface revealable reveal-once">
+          <div className="section-heading product-heading">
+            <div>
+              <p className="eyebrow">用户流程</p>
+              <h2>从岗位 JD 到定制简历</h2>
+            </div>
+            <span className="state-badge">求职 Agent</span>
+          </div>
+          <div className="product-copy">
+            <p>
+              这个项目不负责“编造简历”。它负责把你的真实经历拆成证据，再把这些证据
+              翻译成目标岗位能看懂的表达；缺少证据的地方只会进入风险清单。
+            </p>
+            <p>
+              最终产物是：匹配报告、能力缺口、改写建议、审批记录和可导出的中文 PDF。
+            </p>
+          </div>
+          <div className="journey-steps">
+            <ProductStep
+              index="01"
+              title="输入真实经历"
+              text="教育、技能、项目、实习、作品都可以写，系统只会基于这些证据生成建议。"
+              active
+            />
+            <ProductStep
+              index="02"
+              title="粘贴目标 JD"
+              text="系统解析硬性要求、加分项、职责和隐藏关键词。"
+              active={Boolean(jobResult)}
+            />
+            <ProductStep
+              index="03"
+              title="查看匹配与缺口"
+              text="知道哪些能写、哪些缺证据、哪些需要补项目。"
+              active={Boolean(matchResult)}
+            />
+            <ProductStep
+              index="04"
+              title="审批并导出"
+              text="确认没有虚构内容后，导出中文简历改写稿。"
+              active={Boolean(rewriteResult)}
+            />
+          </div>
+        </section>
+
+        <section className="user-flow-grid">
+          <section className="product-panel product-panel-wide scroll-fade glass-surface liftable">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Week2 Parser</p>
-                <h2>Structured intake</h2>
+                <p className="eyebrow">第一步</p>
+                <h2>准备投递材料</h2>
               </div>
-              <span className="state-badge">W2</span>
+              <span className="state-badge">真实证据</span>
             </div>
             <div className="workflow-input-grid">
               <label className="workflow-field">
-                <span>Resume</span>
+                <span>我的真实经历 / 能力</span>
                 <textarea
                   value={resumeText}
                   onChange={(event) => setResumeText(event.target.value)}
@@ -1092,7 +1175,7 @@ export default function App() {
                 />
               </label>
               <label className="workflow-field">
-                <span>Job description</span>
+                <span>目标岗位 JD</span>
                 <textarea
                   value={jobText}
                   onChange={(event) => setJobText(event.target.value)}
@@ -1102,12 +1185,20 @@ export default function App() {
             </div>
             <div className="workflow-actions">
               <button
+                className="primary-action liftable"
+                type="button"
+                onClick={handleAnalyzeIntake}
+                disabled={workflowAction !== null}
+              >
+                {workflowAction === "intake-analysis" ? "解析中" : "解析材料"}
+              </button>
+              <button
                 className="ghost-action liftable"
                 type="button"
                 onClick={handleParseResume}
                 disabled={workflowAction !== null}
               >
-                {workflowAction === "resume-parser" ? "Parsing" : "Parse resume"}
+                {workflowAction === "resume-parser" ? "解析中" : "只解析经历"}
               </button>
               <button
                 className="ghost-action liftable"
@@ -1115,7 +1206,7 @@ export default function App() {
                 onClick={handleParseJob}
                 disabled={workflowAction !== null}
               >
-                {workflowAction === "job-parser" ? "Parsing" : "Parse JD"}
+                {workflowAction === "job-parser" ? "解析中" : "只解析 JD"}
               </button>
             </div>
             <div className="parser-result-grid">
@@ -1124,143 +1215,242 @@ export default function App() {
             </div>
           </section>
 
-          <section className="workflow-panel scroll-fade glass-surface liftable">
+          <section className="product-panel scroll-fade glass-surface liftable">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Week3 LoopEngine</p>
-                <h2>Plan · Execute · Verify</h2>
+                <p className="eyebrow">第二步</p>
+                <h2>岗位匹配报告</h2>
               </div>
-              <span className="state-badge">W3</span>
+              <span className="state-badge">证据匹配</span>
             </div>
-            <div className="loop-stats">
-              <WorkflowStat label="Current" value={formatState(latestState)} />
-              <WorkflowStat label="Steps" value={activeStepCount.toString()} />
-              <WorkflowStat label="Checkpoints" value={activeCheckpoints.toString()} />
-            </div>
-            <label className="workflow-field workflow-field-compact">
-              <span>Approval notes</span>
-              <textarea
-                value={approvalNotes}
-                onChange={(event) => setApprovalNotes(event.target.value)}
-                rows={3}
-                placeholder="Approval note for the active LoopEngine run"
-              />
-            </label>
-            <div className="workflow-actions loop-actions">
+            <div className="product-column">
+              <MatchSummary result={matchResult} />
               <button
                 className="primary-action liftable"
                 type="button"
-                onClick={handleCreateLoopRun}
-                disabled={workflowAction !== null || (!resumeText.trim() && !jobText.trim())}
+                onClick={handleRunMatch}
+                disabled={workflowAction !== null || !canRunMatch}
               >
-                {workflowAction === "loop-run" ? "Running" : "Start loop"}
+                {workflowAction === "match-agent" ? "匹配中" : "生成匹配报告"}
               </button>
-              <button
-                className="ghost-action liftable"
-                type="button"
-                onClick={handleApproveLoopRun}
-                disabled={workflowAction !== null || !canApproveActiveRun}
-              >
-                {workflowAction === "loop-approval" ? "Approving" : "Approve"}
-              </button>
-              <button
-                className="ghost-action liftable"
-                type="button"
-                onClick={handleResumeLoopRun}
-                disabled={workflowAction !== null || !canResumeActiveRun}
-              >
-                {workflowAction === "loop-resume" ? "Resuming" : "Resume"}
-              </button>
+              {!canRunMatch ? <span className="match-hint">请先解析经历和 JD。</span> : null}
             </div>
           </section>
 
-          <section className="workflow-panel workflow-panel-wide scroll-fade glass-surface liftable">
+          <section className="product-panel scroll-fade glass-surface liftable">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Week4 MatchAgent</p>
-                <h2>Fit score · Evidence · Gaps</h2>
+                <p className="eyebrow">第三步</p>
+                <h2>简历改写与导出</h2>
               </div>
-              <span className="state-badge">W4</span>
+              <span className="state-badge">人工确认</span>
             </div>
-            <div className="match-workspace">
-              <MatchSummary result={matchResult} />
-              <div className="match-side">
-                <p>
-                  MatchAgent compares the parsed resume profile with the parsed JD profile, then
-                  ranks truthful rewrite priorities before Week5.
-                </p>
+            <div className="product-column">
+              <RewriteSummary result={rewriteResult} />
+              <label className="workflow-field workflow-field-compact">
+                <span>审批备注</span>
+                <textarea
+                  value={rewriteApprovalNotes}
+                  onChange={(event) => setRewriteApprovalNotes(event.target.value)}
+                  rows={3}
+                  placeholder="确认这些改写都有真实证据后再审批"
+                />
+              </label>
+              <div className="workflow-actions">
                 <button
                   className="primary-action liftable"
                   type="button"
-                  onClick={handleRunMatch}
-                  disabled={workflowAction !== null || !canRunMatch}
+                  onClick={handleCreateRewriteDraft}
+                  disabled={workflowAction !== null || !canRunRewrite}
                 >
-                  {workflowAction === "match-agent" ? "Matching" : "Run match"}
+                  {workflowAction === "rewrite-draft" ? "生成中" : "生成改写稿"}
                 </button>
-                {!canRunMatch ? (
-                  <span className="match-hint">Parse both resume and JD first.</span>
-                ) : null}
+                <button
+                  className="ghost-action liftable"
+                  type="button"
+                  onClick={handleApproveRewriteDraft}
+                  disabled={workflowAction !== null || !canApproveRewrite}
+                >
+                  {workflowAction === "rewrite-approval" ? "审批中" : "确认真实"}
+                </button>
+                <button
+                  className="ghost-action liftable"
+                  type="button"
+                  onClick={handleExportRewritePdf}
+                  disabled={workflowAction !== null || !canExportRewrite}
+                >
+                  {workflowAction === "rewrite-export" ? "导出中" : "导出 PDF"}
+                </button>
               </div>
-            </div>
-          </section>
-
-          <section className="workflow-panel workflow-panel-wide scroll-fade glass-surface liftable">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Week5 ResumeRewriteAgent</p>
-                <h2>Rewrite draft · Diff · Approval</h2>
-              </div>
-              <span className="state-badge">W5</span>
-            </div>
-            <div className="rewrite-workspace">
-              <RewriteSummary result={rewriteResult} />
-              <div className="rewrite-side">
-                <p>
-                  ResumeRewriteAgent turns W4 gaps and evidence mapping into reviewable resume
-                  changes. Missing evidence stays marked as risk instead of becoming fake claims.
-                </p>
-                <label className="workflow-field workflow-field-compact">
-                  <span>Rewrite approval notes</span>
-                  <textarea
-                    value={rewriteApprovalNotes}
-                    onChange={(event) => setRewriteApprovalNotes(event.target.value)}
-                    rows={3}
-                    placeholder="Approve only if the evidence is truthful"
-                  />
-                </label>
-                <div className="workflow-actions">
-                  <button
-                    className="primary-action liftable"
-                    type="button"
-                    onClick={handleCreateRewriteDraft}
-                    disabled={workflowAction !== null || !canRunRewrite}
-                  >
-                    {workflowAction === "rewrite-draft" ? "Drafting" : "Create draft"}
-                  </button>
-                  <button
-                    className="ghost-action liftable"
-                    type="button"
-                    onClick={handleApproveRewriteDraft}
-                    disabled={workflowAction !== null || !canApproveRewrite}
-                  >
-                    {workflowAction === "rewrite-approval" ? "Approving" : "Approve draft"}
-                  </button>
-                  <button
-                    className="ghost-action liftable"
-                    type="button"
-                    onClick={handleExportRewritePdf}
-                    disabled={workflowAction !== null || !canExportRewrite}
-                  >
-                    {workflowAction === "rewrite-export" ? "Exporting" : "Export PDF"}
-                  </button>
-                </div>
-                {!canRunRewrite ? (
-                  <span className="match-hint">Run W2 parser and W4 match first.</span>
-                ) : null}
-              </div>
+              {!canRunRewrite ? <span className="match-hint">请先完成匹配报告。</span> : null}
             </div>
           </section>
         </section>
+
+        <details className="developer-view glass-surface revealable">
+          <summary>
+            <span>开发者视图</span>
+            <strong>查看 Week2-5 Agent 运行细节、审批和 checkpoint</strong>
+          </summary>
+          <section className="workflow-board developer-workflow">
+            <section className="workflow-panel scroll-fade glass-surface liftable">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Week2 Parser</p>
+                  <h2>结构化录入</h2>
+                </div>
+                <span className="state-badge">W2</span>
+              </div>
+              <div className="parser-result-grid">
+                <ParserSummary kind="resume" result={resumeResult} />
+                <ParserSummary kind="job" result={jobResult} />
+              </div>
+              <div className="workflow-actions">
+                <button
+                  className="ghost-action liftable"
+                  type="button"
+                  onClick={handleParseResume}
+                  disabled={workflowAction !== null}
+                >
+                  {workflowAction === "resume-parser" ? "解析中" : "重新解析经历"}
+                </button>
+                <button
+                  className="ghost-action liftable"
+                  type="button"
+                  onClick={handleParseJob}
+                  disabled={workflowAction !== null}
+                >
+                  {workflowAction === "job-parser" ? "解析中" : "重新解析 JD"}
+                </button>
+              </div>
+            </section>
+
+            <section className="workflow-panel scroll-fade glass-surface liftable">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Week3 LoopEngine</p>
+                  <h2>规划 · 执行 · 校验</h2>
+                </div>
+                <span className="state-badge">W3</span>
+              </div>
+              <div className="loop-stats">
+                <WorkflowStat label="当前状态" value={formatState(latestState)} />
+                <WorkflowStat label="步骤" value={activeStepCount.toString()} />
+                <WorkflowStat label="Checkpoint" value={activeCheckpoints.toString()} />
+              </div>
+              <label className="workflow-field workflow-field-compact">
+                <span>审批备注</span>
+                <textarea
+                  value={approvalNotes}
+                  onChange={(event) => setApprovalNotes(event.target.value)}
+                  rows={3}
+                  placeholder="给当前 LoopEngine 运行写一条审批备注"
+                />
+              </label>
+              <div className="workflow-actions loop-actions">
+                <button
+                  className="primary-action liftable"
+                  type="button"
+                  onClick={handleCreateLoopRun}
+                  disabled={workflowAction !== null || (!resumeText.trim() && !jobText.trim())}
+                >
+                  {workflowAction === "loop-run" ? "运行中" : "启动流程"}
+                </button>
+                <button
+                  className="ghost-action liftable"
+                  type="button"
+                  onClick={handleApproveLoopRun}
+                  disabled={workflowAction !== null || !canApproveActiveRun}
+                >
+                  {workflowAction === "loop-approval" ? "审批中" : "审批通过"}
+                </button>
+                <button
+                  className="ghost-action liftable"
+                  type="button"
+                  onClick={handleResumeLoopRun}
+                  disabled={workflowAction !== null || !canResumeActiveRun}
+                >
+                  {workflowAction === "loop-resume" ? "恢复中" : "恢复运行"}
+                </button>
+              </div>
+            </section>
+
+            <section className="workflow-panel workflow-panel-wide scroll-fade glass-surface liftable">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Week4 MatchAgent</p>
+                  <h2>匹配分 · 证据 · 缺口</h2>
+                </div>
+                <span className="state-badge">W4</span>
+              </div>
+              <div className="match-workspace">
+                <MatchSummary result={matchResult} />
+                <div className="match-side">
+                  <p>
+                    MatchAgent 会比较结构化简历和 JD，生成匹配分、证据映射、能力缺口，
+                    并为 Week5 排出真实可写的改写优先级。
+                  </p>
+                  <button
+                    className="primary-action liftable"
+                    type="button"
+                    onClick={handleRunMatch}
+                    disabled={workflowAction !== null || !canRunMatch}
+                  >
+                    {workflowAction === "match-agent" ? "匹配中" : "运行匹配"}
+                  </button>
+                  {!canRunMatch ? (
+                    <span className="match-hint">请先完成经历和 JD 解析。</span>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+
+            <section className="workflow-panel workflow-panel-wide scroll-fade glass-surface liftable">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Week5 ResumeRewriteAgent</p>
+                  <h2>改写草稿 · Diff · 审批</h2>
+                </div>
+                <span className="state-badge">W5</span>
+              </div>
+              <div className="rewrite-workspace">
+                <RewriteSummary result={rewriteResult} />
+                <div className="rewrite-side">
+                  <p>
+                    ResumeRewriteAgent 会把 W4 的缺口和证据映射转成可审阅的简历改写建议。
+                    没有证据的内容只会被标为风险，不会变成虚假经历。
+                  </p>
+                  <div className="workflow-actions">
+                    <button
+                      className="primary-action liftable"
+                      type="button"
+                      onClick={handleCreateRewriteDraft}
+                      disabled={workflowAction !== null || !canRunRewrite}
+                    >
+                      {workflowAction === "rewrite-draft" ? "生成中" : "生成草稿"}
+                    </button>
+                    <button
+                      className="ghost-action liftable"
+                      type="button"
+                      onClick={handleApproveRewriteDraft}
+                      disabled={workflowAction !== null || !canApproveRewrite}
+                    >
+                      {workflowAction === "rewrite-approval" ? "审批中" : "审批草稿"}
+                    </button>
+                    <button
+                      className="ghost-action liftable"
+                      type="button"
+                      onClick={handleExportRewritePdf}
+                      disabled={workflowAction !== null || !canExportRewrite}
+                    >
+                      {workflowAction === "rewrite-export" ? "导出中" : "导出 PDF"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </section>
+        </details>
 
         {workflowError ? <p className="error-text glass-surface revealable">{workflowError}</p> : null}
 
@@ -1268,29 +1458,29 @@ export default function App() {
           <RunTrace detail={activeRun} />
         ) : (
           <section className="empty-state glass-surface liftable revealable">
-            <p className="eyebrow">Trace</p>
-            <h2>Ready for the first run</h2>
-            <p>Planner output, checkpoints, events, tokens, latency, and cost will appear here.</p>
+            <p className="eyebrow">运行轨迹</p>
+            <h2>等待第一次运行</h2>
+            <p>规划结果、checkpoint、事件、token、延迟和成本会显示在这里。</p>
           </section>
         )}
 
         <section className="run-list glass-surface liftable revealable">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">History</p>
-              <h2>Recent runs</h2>
+              <p className="eyebrow">历史记录</p>
+              <h2>最近运行</h2>
             </div>
             <button className="ghost-action liftable" type="button" onClick={refreshRuns}>
-              Refresh
+              刷新
             </button>
           </div>
           <div className="run-table">
             {runs.map((run) => (
               <div className="run-row liftable revealable" key={run.run_id}>
                 <span>{run.run_id}</span>
-                <strong>{run.state}</strong>
-                <span>{run.step_count} steps</span>
-                <span>{run.total_tokens} tokens</span>
+                <strong>{formatState(run.state)}</strong>
+                <span>{run.step_count} 个步骤</span>
+                <span>{run.total_tokens} Token</span>
               </div>
             ))}
           </div>
@@ -1310,6 +1500,26 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ProductStep({
+  index,
+  title,
+  text,
+  active
+}: {
+  index: string;
+  title: string;
+  text: string;
+  active: boolean;
+}) {
+  return (
+    <article className={active ? "journey-step journey-step-active" : "journey-step"}>
+      <span>{index}</span>
+      <strong>{title}</strong>
+      <p>{text}</p>
+    </article>
+  );
+}
+
 function ParserSummary({
   kind,
   result
@@ -1320,9 +1530,9 @@ function ParserSummary({
   if (!result) {
     return (
       <article className="parser-result-card parser-result-empty">
-        <p className="eyebrow">{kind === "resume" ? "Resume Profile" : "Job Profile"}</p>
-        <h3>{kind === "resume" ? "Awaiting resume parse" : "Awaiting JD parse"}</h3>
-        <p>Structured fields, metadata, and warnings will land here.</p>
+        <p className="eyebrow">{kind === "resume" ? "简历画像" : "JD 画像"}</p>
+        <h3>{kind === "resume" ? "等待解析简历" : "等待解析 JD"}</h3>
+        <p>结构化字段、元数据和风险提示会显示在这里。</p>
       </article>
     );
   }
@@ -1331,38 +1541,38 @@ function ParserSummary({
   const resumeProfile = isResume ? (result as ParseResumeResponse).profile : null;
   const jobProfile = !isResume ? (result as ParseJobResponse).profile : null;
   const title = resumeProfile
-    ? `${resumeProfile.skills.length} skills · ${resumeProfile.projects.length} projects`
-    : `${jobProfile?.company ?? "Unknown company"} · ${jobProfile?.title ?? "Untitled role"}`;
+    ? `${resumeProfile.skills.length} 个技能 · ${resumeProfile.projects.length} 个项目`
+    : `${jobProfile?.company ?? "未知公司"} · ${jobProfile?.title ?? "未命名岗位"}`;
   const summary = resumeProfile
-    ? `${resumeProfile.education.length} education · ${resumeProfile.experiences.length} experience · ${resumeProfile.keywords.length} keywords`
-    : `${jobProfile?.hard_requirements.length ?? 0} required · ${
+    ? `${resumeProfile.education.length} 段教育 · ${resumeProfile.experiences.length} 段经历 · ${resumeProfile.keywords.length} 个关键词`
+    : `${jobProfile?.hard_requirements.length ?? 0} 个硬性要求 · ${
         jobProfile?.nice_to_have.length ?? 0
-      } preferred · ${jobProfile?.responsibilities.length ?? 0} responsibilities`;
+      } 个加分项 · ${jobProfile?.responsibilities.length ?? 0} 条职责`;
   const chips = resumeProfile
     ? resumeProfile.skills.concat(resumeProfile.keywords).slice(0, 6)
     : (jobProfile?.tech_keywords ?? []).concat(jobProfile?.hidden_keywords ?? []).slice(0, 6);
 
   return (
     <article className="parser-result-card liftable">
-      <p className="eyebrow">{isResume ? "Resume Profile" : "Job Profile"}</p>
+      <p className="eyebrow">{isResume ? "简历画像" : "JD 画像"}</p>
       <h3>{title}</h3>
       <p>{summary}</p>
       <div className="chip-row">
-        {(chips.length ? chips : ["No keywords yet"]).map((chip, index) => (
+        {(chips.length ? chips : ["暂无关键词"]).map((chip, index) => (
           <span key={`${chip}-${index}`}>{chip}</span>
         ))}
       </div>
       <dl className="metadata-row">
         <div>
-          <dt>Source</dt>
+          <dt>来源</dt>
           <dd>{formatSource(result.metadata.source)}</dd>
         </div>
         <div>
-          <dt>Model</dt>
-          <dd>{result.metadata.model ?? "local"}</dd>
+          <dt>模型</dt>
+          <dd>{result.metadata.model ?? "本地规则"}</dd>
         </div>
         <div>
-          <dt>Issues</dt>
+          <dt>问题</dt>
           <dd>{result.metadata.issues.length}</dd>
         </div>
       </dl>
@@ -1385,12 +1595,12 @@ function MatchSummary({ result }: { result: MatchResponse | null }) {
       <article className="match-summary match-summary-empty">
         <div className="score-orb">
           <strong>--</strong>
-          <span>score</span>
+          <span>分数</span>
         </div>
         <div>
-          <p className="eyebrow">Awaiting MatchAgent</p>
-          <h3>Parse resume and JD, then run matching.</h3>
-          <p>Evidence mapping, missing keywords, and rewrite priorities will appear here.</p>
+          <p className="eyebrow">等待 MatchAgent</p>
+          <h3>先解析简历和 JD，再运行匹配。</h3>
+          <p>证据映射、缺失关键词和改写优先级会显示在这里。</p>
         </div>
       </article>
     );
@@ -1398,10 +1608,10 @@ function MatchSummary({ result }: { result: MatchResponse | null }) {
 
   const { match } = result;
   const breakdown = [
-    ["Hard", match.score_breakdown.hard_requirements],
-    ["Nice", match.score_breakdown.nice_to_have],
-    ["Resp", match.score_breakdown.responsibilities],
-    ["Keywords", match.score_breakdown.keyword_alignment]
+    ["硬性要求", match.score_breakdown.hard_requirements],
+    ["加分项", match.score_breakdown.nice_to_have],
+    ["岗位职责", match.score_breakdown.responsibilities],
+    ["关键词", match.score_breakdown.keyword_alignment]
   ];
   const topGaps = match.gaps.slice(0, 3);
   const topPriorities = match.priority_ranking.slice(0, 3);
@@ -1411,10 +1621,10 @@ function MatchSummary({ result }: { result: MatchResponse | null }) {
       <div className="match-topline">
         <div className="score-orb score-orb-on">
           <strong>{Math.round(match.overall_score)}</strong>
-          <span>score</span>
+          <span>分数</span>
         </div>
         <div>
-          <p className="eyebrow">Match result</p>
+          <p className="eyebrow">匹配结果</p>
           <h3>{match.summary}</h3>
           <div className="keyword-cloud">
             {match.matched_keywords.slice(0, 6).map((keyword) => (
@@ -1440,20 +1650,20 @@ function MatchSummary({ result }: { result: MatchResponse | null }) {
       </div>
       <div className="match-lists">
         <div>
-          <p className="eyebrow">Top gaps</p>
+          <p className="eyebrow">主要缺口</p>
           {topGaps.length ? (
             topGaps.map((gap) => (
               <div className="mini-row" key={gap.requirement}>
-                <strong>{gap.severity}</strong>
+                <strong>{formatSeverity(gap.severity)}</strong>
                 <span>{gap.requirement}</span>
               </div>
             ))
           ) : (
-            <p>No critical gap detected.</p>
+            <p>没有发现关键缺口。</p>
           )}
         </div>
         <div>
-          <p className="eyebrow">Priorities</p>
+          <p className="eyebrow">改写优先级</p>
           {topPriorities.length ? (
             topPriorities.map((priority) => (
               <div className="mini-row" key={`${priority.priority}-${priority.item}`}>
@@ -1462,7 +1672,7 @@ function MatchSummary({ result }: { result: MatchResponse | null }) {
               </div>
             ))
           ) : (
-            <p>No rewrite priority yet.</p>
+            <p>暂无改写优先级。</p>
           )}
         </div>
       </div>
@@ -1475,9 +1685,9 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
     return (
       <article className="rewrite-summary rewrite-summary-empty">
         <div>
-          <p className="eyebrow">Awaiting ResumeRewriteAgent</p>
-          <h3>Run matching first, then create an evidence-locked draft.</h3>
-          <p>Diffs, linked evidence, approval status, and risk warnings will appear here.</p>
+          <p className="eyebrow">等待 ResumeRewriteAgent</p>
+          <h3>先完成匹配，再生成证据锁定的改写草稿。</h3>
+          <p>Diff、关联证据、审批状态和风险提示会显示在这里。</p>
         </div>
       </article>
     );
@@ -1491,7 +1701,7 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
     <article className="rewrite-summary">
       <div className="rewrite-header">
         <div>
-          <p className="eyebrow">Rewrite draft</p>
+          <p className="eyebrow">改写草稿</p>
           <h3>{draft.headline}</h3>
           <div className="keyword-cloud">
             {draft.target_keywords.slice(0, 8).map((keyword) => (
@@ -1502,23 +1712,23 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
           </div>
         </div>
         <div className="rewrite-status">
-          <span>{draft.approval_status}</span>
+          <span>{formatApprovalStatus(draft.approval_status)}</span>
           <strong>{draft.changes.length}</strong>
-          <small>changes</small>
+          <small>处改写</small>
         </div>
       </div>
 
       <div className="rewrite-metrics">
         <div>
-          <span>Evidence links</span>
+          <span>证据链接</span>
           <strong>{evidenceCount}</strong>
         </div>
         <div>
-          <span>Risks</span>
+          <span>风险</span>
           <strong>{draft.risk_warnings.length}</strong>
         </div>
         <div>
-          <span>Run</span>
+          <span>运行</span>
           <strong>{result.run_id.slice(0, 12)}</strong>
         </div>
       </div>
@@ -1527,8 +1737,10 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
         {topChanges.map((change) => (
           <div className="rewrite-change" key={change.change_id}>
             <div className="rewrite-change-title">
-              <strong>{change.section}</strong>
-              <span className={`risk-pill risk-${change.risk_level}`}>{change.risk_level}</span>
+              <strong>{formatRewriteSection(change.section)}</strong>
+              <span className={`risk-pill risk-${change.risk_level}`}>
+                {formatRiskLevel(change.risk_level)}
+              </span>
             </div>
             {change.original_text ? (
               <p className="diff-line diff-remove">- {change.original_text}</p>
@@ -1550,7 +1762,7 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
 
       {draft.risk_warnings.length ? (
         <div className="risk-list">
-          <p className="eyebrow">Risk warnings</p>
+          <p className="eyebrow">风险提示</p>
           {draft.risk_warnings.slice(0, 4).map((warning) => (
             <span key={warning}>{warning}</span>
           ))}
@@ -1561,17 +1773,78 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
 }
 
 function formatState(state: string): string {
-  return state
-    .toLowerCase()
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+  const labels: Record<string, string> = {
+    IDLE: "空闲",
+    CREATED: "已创建",
+    RUNNING: "运行中",
+    WAITING_APPROVAL: "等待审批",
+    COMPLETED: "已完成",
+    FAILED: "失败",
+    CANCELLED: "已取消",
+    PAUSED: "已暂停",
+    APPROVED: "已审批"
+  };
+  return labels[state] ?? titleizeToken(state);
 }
 
 function formatSource(source: string): string {
-  return source
+  const labels: Record<string, string> = {
+    heuristic_dry_run: "本地规则解析",
+    llm_structured_output: "LLM 结构化输出",
+    llm_structured: "LLM 结构化输出",
+    local: "本地",
+    manual: "手动输入"
+  };
+  return labels[source] ?? titleizeToken(source);
+}
+
+function formatSeverity(severity: string): string {
+  const labels: Record<string, string> = {
+    high: "高",
+    medium: "中",
+    low: "低",
+    none: "无"
+  };
+  return labels[severity.toLowerCase()] ?? severity;
+}
+
+function formatRiskLevel(level: string): string {
+  const labels: Record<string, string> = {
+    low: "低风险",
+    medium: "中风险",
+    high: "高风险"
+  };
+  return labels[level.toLowerCase()] ?? level;
+}
+
+function formatRewriteSection(section: string): string {
+  const labels: Record<string, string> = {
+    summary: "个人概要",
+    skills: "技能",
+    project: "项目经历",
+    projects: "项目经历",
+    experience: "工作经历",
+    education: "教育经历",
+    evidence_needed: "需要补充证据"
+  };
+  return labels[section.toLowerCase()] ?? titleizeToken(section);
+}
+
+function formatApprovalStatus(status: string): string {
+  const labels: Record<string, string> = {
+    WAITING_APPROVAL: "等待审批",
+    APPROVED: "已审批",
+    REJECTED: "已拒绝",
+    DRAFT: "草稿"
+  };
+  return labels[status] ?? formatState(status);
+}
+
+function titleizeToken(value: string): string {
+  return value
     .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
 }
 

@@ -82,7 +82,8 @@ def test_resume_rewrite_agent_creates_evidence_locked_draft() -> None:
     assert any(change.evidence for change in draft.changes if change.section != "evidence_needed")
     assert any(change.section == "evidence_needed" for change in draft.changes)
     assert any("SQL" in warning for warning in draft.risk_warnings)
-    assert "CareerPilot Tailored Resume Draft" in draft.markdown
+    assert "CareerPilot 中文简历改写稿" in draft.markdown
+    assert "改写建议" in draft.markdown
 
 
 def test_rewrite_endpoint_requires_approval_before_export(client: TestClient) -> None:
@@ -122,3 +123,4 @@ def test_rewrite_endpoint_requires_approval_before_export(client: TestClient) ->
     pdf = client.get(f"/api/rewrite-drafts/{run_id}/export.pdf")
     assert pdf.status_code == 200
     assert pdf.content.startswith(b"%PDF")
+    assert len(pdf.content) > 1000
