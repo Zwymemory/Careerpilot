@@ -138,13 +138,34 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const duration = 1600;
+    const initialLoader = document.getElementById("initial-boot-loader");
+    if (initialLoader) {
+      initialLoader.classList.add("initial-boot-loader-hidden");
+      window.setTimeout(() => initialLoader.remove(), 520);
+    }
+
+    const minDuration = 1500;
     const startedAt = performance.now();
+    let pageLoaded = document.readyState === "complete";
     let frame = 0;
     let hideTimer = 0;
 
+    const handleLoad = () => {
+      pageLoaded = true;
+    };
+
     const tick = (now: number) => {
-      const progress = Math.min(100, Math.round(((now - startedAt) / duration) * 100));
+      const elapsed = now - startedAt;
+      const warmupProgress = Math.min(92, Math.round((elapsed / minDuration) * 92));
+
+      if (!pageLoaded || elapsed < minDuration) {
+        setBootProgress(warmupProgress);
+        frame = requestAnimationFrame(tick);
+        return;
+      }
+
+      const completionProgress = 92 + Math.min(8, Math.round(((elapsed - minDuration) / 320) * 8));
+      const progress = Math.min(100, completionProgress);
       setBootProgress(progress);
 
       if (progress < 100) {
@@ -155,12 +176,19 @@ export default function App() {
       hideTimer = window.setTimeout(() => setIsBooting(false), 260);
     };
 
+    window.addEventListener("load", handleLoad, { once: true });
     frame = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(frame);
       window.clearTimeout(hideTimer);
+      window.removeEventListener("load", handleLoad);
     };
   }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle("boot-lock", isBooting);
+    return () => document.body.classList.remove("boot-lock");
+  }, [isBooting]);
 
   useEffect(() => {
     modelMotionRef.current.busy = isLoading || workflowAction !== null;
@@ -802,7 +830,10 @@ export default function App() {
           <span className="boot-flower" />
           <span className="boot-mark">CareerPilot</span>
           <span className="boot-submark">Agent · Trace · Studio</span>
-          <span className="boot-center-line">
+          <span
+            className="boot-center-line"
+            style={{ "--boot-progress": `${bootProgress}%` } as React.CSSProperties}
+          >
             <i />
           </span>
         </div>

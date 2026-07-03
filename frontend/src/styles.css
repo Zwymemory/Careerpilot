@@ -22,6 +22,10 @@ body {
   overflow-x: hidden;
 }
 
+body.boot-lock {
+  overflow: hidden;
+}
+
 button,
 textarea {
   font: inherit;
@@ -184,10 +188,10 @@ button:disabled {
   z-index: 60;
   display: grid;
   grid-template-rows: 96px minmax(0, 1fr) 96px;
-  pointer-events: none;
+  pointer-events: auto;
   background:
-    radial-gradient(circle at 47% 40%, rgba(180, 204, 235, 0.42), transparent 33%),
-    linear-gradient(145deg, rgba(228, 239, 231, 0.98), rgba(203, 224, 239, 0.97) 42%, rgba(213, 244, 211, 0.96));
+    radial-gradient(circle at 47% 40%, rgba(180, 204, 235, 0.5), transparent 33%),
+    linear-gradient(145deg, #e4efe7, #cbe0ef 42%, #d5f4d3);
   transition:
     opacity 680ms ease,
     filter 680ms ease,
@@ -198,6 +202,7 @@ button:disabled {
   opacity: 0;
   filter: blur(18px);
   transform: scale(1.04);
+  pointer-events: none;
 }
 
 .boot-card {
@@ -294,9 +299,9 @@ button:disabled {
 .boot-center-line i {
   position: absolute;
   inset: 0 auto 0 0;
-  width: 58%;
+  width: var(--boot-progress, 0%);
   background: rgba(20, 56, 39, 0.48);
-  animation: boot-center-run 1.2s cubic-bezier(0.3, 0.72, 0.18, 1) both;
+  transition: width 120ms linear;
 }
 
 .app-shell {
@@ -442,32 +447,32 @@ button:disabled {
 }
 
 .metric:nth-child(1):hover {
-  transform: translate3d(-3px, -5px, 0) rotate(-0.35deg);
+  transform: translate3d(0, 0, 0);
 }
 
 .metric:nth-child(2):hover {
-  transform: translate3d(1px, -6px, 0) rotate(0.28deg);
+  transform: translate3d(0, 0, 0);
 }
 
 .metric:nth-child(3):hover {
-  transform: translate3d(2px, -5px, 0) rotate(-0.22deg);
+  transform: translate3d(0, 0, 0);
 }
 
 .metric:nth-child(4):hover {
-  transform: translate3d(4px, -6px, 0) rotate(0.38deg);
+  transform: translate3d(0, 0, 0);
 }
 
 .trace-main.liftable:hover {
-  transform: translate3d(-2px, -5px, 0) rotateX(0.4deg);
+  transform: translate3d(0, 0, 0);
 }
 
 .event-panel.liftable:hover {
-  transform: translate3d(3px, -5px, 0) rotateY(-0.8deg);
+  transform: translate3d(0, 0, 0);
 }
 
 .run-list.liftable:hover,
 .empty-state.liftable:hover {
-  transform: translate3d(0, -5px, 0) rotateX(0.35deg);
+  transform: translate3d(0, 0, 0);
 }
 
 .run-row.liftable:hover,
@@ -1104,7 +1109,7 @@ h3 {
 }
 
 .workflow-panel.liftable:hover {
-  transform: translate3d(0, -5px, 0) rotateX(0.28deg);
+  transform: translate3d(0, 0, 0);
 }
 
 .workflow-input-grid {

@@ -6,6 +6,51 @@
     <title>CareerPilot</title>
   </head>
   <body>
+    <style>
+      #initial-boot-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        color: rgba(20, 56, 39, 0.9);
+        background:
+          radial-gradient(circle at 47% 40%, rgba(180, 204, 235, 0.5), transparent 33%),
+          linear-gradient(145deg, #e4efe7, #cbe0ef 42%, #d5f4d3);
+        transition:
+          opacity 480ms ease,
+          filter 480ms ease,
+          transform 480ms cubic-bezier(0.18, 0.86, 0.3, 1);
+      }
+
+      #initial-boot-loader.initial-boot-loader-hidden {
+        opacity: 0;
+        filter: blur(16px);
+        transform: scale(1.03);
+        pointer-events: none;
+      }
+
+      .initial-boot-card {
+        display: grid;
+        justify-items: center;
+        gap: 10px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(42px, 5vw, 68px);
+      }
+
+      .initial-boot-card small {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 14px;
+        font-weight: 740;
+        letter-spacing: 0.08em;
+      }
+    </style>
+    <div id="initial-boot-loader">
+      <div class="initial-boot-card">
+        <span>CareerPilot</span>
+        <small>LOADING</small>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
