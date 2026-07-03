@@ -1,8 +1,10 @@
 import type {
   JobProfile,
+  MatchProfile,
   MatchResponse,
   ParseJobResponse,
   ParseResumeResponse,
+  ResumeRewriteResponse,
   ResumeProfile,
   RunDetail,
   RunSummary
@@ -113,4 +115,37 @@ export function createMatch(payload: {
       user_id: "local-user"
     })
   });
+}
+
+export function createRewriteDraft(payload: {
+  resume_profile: ResumeProfile;
+  job_profile: JobProfile;
+  match_profile: MatchProfile;
+}): Promise<ResumeRewriteResponse> {
+  return request<ResumeRewriteResponse>("/api/rewrite-drafts", {
+    method: "POST",
+    body: JSON.stringify({
+      ...payload,
+      user_id: "local-user"
+    })
+  });
+}
+
+export function approveRewriteDraft(runId: string, notes?: string): Promise<RunDetail> {
+  return request<RunDetail>(`/api/rewrite-drafts/${runId}/approve`, {
+    method: "POST",
+    body: JSON.stringify({
+      approved_by: "local-user",
+      notes: notes || null
+    })
+  });
+}
+
+export async function exportRewritePdf(runId: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/api/rewrite-drafts/${runId}/export.pdf`);
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Request failed with ${response.status}`);
+  }
+  return response.blob();
 }

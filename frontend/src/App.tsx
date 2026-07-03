@@ -2,9 +2,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   approveLoopRun,
+  approveRewriteDraft,
   createLoopRun,
   createMatch,
+  createRewriteDraft,
   createRun,
+  exportRewritePdf,
   getRun,
   listRuns,
   parseJob,
@@ -16,6 +19,7 @@ import type {
   MatchResponse,
   ParseJobResponse,
   ParseResumeResponse,
+  ResumeRewriteResponse,
   RunDetail,
   RunSummary
 } from "./types";
@@ -31,6 +35,9 @@ type WorkflowAction =
   | "resume-parser"
   | "job-parser"
   | "match-agent"
+  | "rewrite-draft"
+  | "rewrite-approval"
+  | "rewrite-export"
   | "loop-run"
   | "loop-approval"
   | "loop-resume";
@@ -61,9 +68,11 @@ export default function App() {
   const [resumeResult, setResumeResult] = useState<ParseResumeResponse | null>(null);
   const [jobResult, setJobResult] = useState<ParseJobResponse | null>(null);
   const [matchResult, setMatchResult] = useState<MatchResponse | null>(null);
+  const [rewriteResult, setRewriteResult] = useState<ResumeRewriteResponse | null>(null);
   const [workflowAction, setWorkflowAction] = useState<WorkflowAction | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [approvalNotes, setApprovalNotes] = useState("");
+  const [rewriteApprovalNotes, setRewriteApprovalNotes] = useState("");
   const [isBooting, setIsBooting] = useState(true);
   const [bootProgress, setBootProgress] = useState(0);
   const [completionPulse, setCompletionPulse] = useState(false);
@@ -604,6 +613,7 @@ export default function App() {
       const result = await parseResume(text);
       setResumeResult(result);
       setMatchResult(null);
+      setRewriteResult(null);
       await showRun(result.run_id);
       await refreshRuns();
       markRequestComplete();
@@ -628,6 +638,7 @@ export default function App() {
       const result = await parseJob(text);
       setJobResult(result);
       setMatchResult(null);
+      setRewriteResult(null);
       await showRun(result.run_id);
       await refreshRuns();
       markRequestComplete();
@@ -681,11 +692,91 @@ export default function App() {
         job_profile: jobResult.profile
       });
       setMatchResult(result);
+      setRewriteResult(null);
       await showRun(result.run_id);
       await refreshRuns();
       markRequestComplete();
     } catch (err) {
       setWorkflowError(err instanceof Error ? err.message : "MatchAgent failed.");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleCreateRewriteDraft() {
+    if (!resumeResult || !jobResult || !matchResult || workflowAction) {
+      setWorkflowError("ResumeRewriteAgent needs parsed resume, parsed JD, and a W4 match result.");
+      return;
+    }
+
+    setWorkflowAction("rewrite-draft");
+    setWorkflowError(null);
+    clearCompletionPulse();
+    try {
+      const result = await createRewriteDraft({
+        resume_profile: resumeResult.profile,
+        job_profile: jobResult.profile,
+        match_profile: matchResult.match
+      });
+      setRewriteResult(result);
+      await showRun(result.run_id);
+      await refreshRuns();
+      markRequestComplete();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "ResumeRewriteAgent failed.");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleApproveRewriteDraft() {
+    if (!rewriteResult || workflowAction) {
+      return;
+    }
+
+    setWorkflowAction("rewrite-approval");
+    setWorkflowError(null);
+    clearCompletionPulse();
+    try {
+      const detail = await approveRewriteDraft(
+        rewriteResult.run_id,
+        rewriteApprovalNotes.trim()
+      );
+      setRewriteResult({
+        ...rewriteResult,
+        draft: {
+          ...rewriteResult.draft,
+          approval_status: "APPROVED"
+        }
+      });
+      setRewriteApprovalNotes("");
+      setActiveRun(detail);
+      await refreshRuns();
+      markRequestComplete();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "Rewrite approval failed.");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleExportRewritePdf() {
+    if (!rewriteResult || workflowAction) {
+      return;
+    }
+
+    setWorkflowAction("rewrite-export");
+    setWorkflowError(null);
+    try {
+      const blob = await exportRewritePdf(rewriteResult.run_id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${rewriteResult.draft.draft_id}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "PDF export failed.");
     } finally {
       setWorkflowAction(null);
     }
@@ -807,6 +898,15 @@ export default function App() {
   const canApproveActiveRun = activeRun?.run.state === "WAITING_APPROVAL";
   const canResumeActiveRun = activeRun?.run.state === "FAILED";
   const canRunMatch = Boolean(resumeResult && jobResult);
+  const canRunRewrite = Boolean(resumeResult && jobResult && matchResult);
+  const canApproveRewrite =
+    rewriteResult?.draft.approval_status === "WAITING_APPROVAL" &&
+    activeRun?.run.run_id === rewriteResult.run_id &&
+    activeRun.run.state === "WAITING_APPROVAL";
+  const canExportRewrite =
+    rewriteResult?.draft.approval_status === "APPROVED" &&
+    activeRun?.run.run_id === rewriteResult.run_id &&
+    activeRun.run.state === "COMPLETED";
   const isModelWorking = isLoading || workflowAction !== null;
 
   return (
@@ -1103,6 +1203,63 @@ export default function App() {
               </div>
             </div>
           </section>
+
+          <section className="workflow-panel workflow-panel-wide scroll-fade glass-surface liftable">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Week5 ResumeRewriteAgent</p>
+                <h2>Rewrite draft · Diff · Approval</h2>
+              </div>
+              <span className="state-badge">W5</span>
+            </div>
+            <div className="rewrite-workspace">
+              <RewriteSummary result={rewriteResult} />
+              <div className="rewrite-side">
+                <p>
+                  ResumeRewriteAgent turns W4 gaps and evidence mapping into reviewable resume
+                  changes. Missing evidence stays marked as risk instead of becoming fake claims.
+                </p>
+                <label className="workflow-field workflow-field-compact">
+                  <span>Rewrite approval notes</span>
+                  <textarea
+                    value={rewriteApprovalNotes}
+                    onChange={(event) => setRewriteApprovalNotes(event.target.value)}
+                    rows={3}
+                    placeholder="Approve only if the evidence is truthful"
+                  />
+                </label>
+                <div className="workflow-actions">
+                  <button
+                    className="primary-action liftable"
+                    type="button"
+                    onClick={handleCreateRewriteDraft}
+                    disabled={workflowAction !== null || !canRunRewrite}
+                  >
+                    {workflowAction === "rewrite-draft" ? "Drafting" : "Create draft"}
+                  </button>
+                  <button
+                    className="ghost-action liftable"
+                    type="button"
+                    onClick={handleApproveRewriteDraft}
+                    disabled={workflowAction !== null || !canApproveRewrite}
+                  >
+                    {workflowAction === "rewrite-approval" ? "Approving" : "Approve draft"}
+                  </button>
+                  <button
+                    className="ghost-action liftable"
+                    type="button"
+                    onClick={handleExportRewritePdf}
+                    disabled={workflowAction !== null || !canExportRewrite}
+                  >
+                    {workflowAction === "rewrite-export" ? "Exporting" : "Export PDF"}
+                  </button>
+                </div>
+                {!canRunRewrite ? (
+                  <span className="match-hint">Run W2 parser and W4 match first.</span>
+                ) : null}
+              </div>
+            </div>
+          </section>
         </section>
 
         {workflowError ? <p className="error-text glass-surface revealable">{workflowError}</p> : null}
@@ -1309,6 +1466,96 @@ function MatchSummary({ result }: { result: MatchResponse | null }) {
           )}
         </div>
       </div>
+    </article>
+  );
+}
+
+function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
+  if (!result) {
+    return (
+      <article className="rewrite-summary rewrite-summary-empty">
+        <div>
+          <p className="eyebrow">Awaiting ResumeRewriteAgent</p>
+          <h3>Run matching first, then create an evidence-locked draft.</h3>
+          <p>Diffs, linked evidence, approval status, and risk warnings will appear here.</p>
+        </div>
+      </article>
+    );
+  }
+
+  const { draft } = result;
+  const topChanges = draft.changes.slice(0, 5);
+  const evidenceCount = draft.changes.reduce((sum, change) => sum + change.evidence.length, 0);
+
+  return (
+    <article className="rewrite-summary">
+      <div className="rewrite-header">
+        <div>
+          <p className="eyebrow">Rewrite draft</p>
+          <h3>{draft.headline}</h3>
+          <div className="keyword-cloud">
+            {draft.target_keywords.slice(0, 8).map((keyword) => (
+              <span className="keyword-match" key={`rewrite-keyword-${keyword}`}>
+                {keyword}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="rewrite-status">
+          <span>{draft.approval_status}</span>
+          <strong>{draft.changes.length}</strong>
+          <small>changes</small>
+        </div>
+      </div>
+
+      <div className="rewrite-metrics">
+        <div>
+          <span>Evidence links</span>
+          <strong>{evidenceCount}</strong>
+        </div>
+        <div>
+          <span>Risks</span>
+          <strong>{draft.risk_warnings.length}</strong>
+        </div>
+        <div>
+          <span>Run</span>
+          <strong>{result.run_id.slice(0, 12)}</strong>
+        </div>
+      </div>
+
+      <div className="rewrite-change-list">
+        {topChanges.map((change) => (
+          <div className="rewrite-change" key={change.change_id}>
+            <div className="rewrite-change-title">
+              <strong>{change.section}</strong>
+              <span className={`risk-pill risk-${change.risk_level}`}>{change.risk_level}</span>
+            </div>
+            {change.original_text ? (
+              <p className="diff-line diff-remove">- {change.original_text}</p>
+            ) : null}
+            <p className="diff-line diff-add">+ {change.revised_text}</p>
+            <p>{change.rationale}</p>
+            {change.evidence.length ? (
+              <div className="evidence-strip">
+                {change.evidence.slice(0, 2).map((item) => (
+                  <span key={`${change.change_id}-${item.field_path}-${item.source_text}`}>
+                    {item.field_path}: {item.source_text}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      {draft.risk_warnings.length ? (
+        <div className="risk-list">
+          <p className="eyebrow">Risk warnings</p>
+          {draft.risk_warnings.slice(0, 4).map((warning) => (
+            <span key={warning}>{warning}</span>
+          ))}
+        </div>
+      ) : null}
     </article>
   );
 }

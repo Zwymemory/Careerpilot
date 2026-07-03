@@ -218,3 +218,30 @@ export interface MatchResponse {
   run_id: string;
   match: MatchProfile;
 }
+
+export interface RewriteChange {
+  change_id: string;
+  section: "summary" | "skills" | "project" | "experience" | "evidence_needed";
+  original_text: string;
+  revised_text: string;
+  rationale: string;
+  evidence: EvidenceItem[];
+  risk_level: "low" | "medium" | "high";
+}
+
+export interface ResumeRewriteDraft {
+  draft_id: string;
+  approval_status: "WAITING_APPROVAL" | "APPROVED" | "REJECTED";
+  company: string | null;
+  title: string | null;
+  headline: string;
+  target_keywords: string[];
+  changes: RewriteChange[];
+  risk_warnings: string[];
+  markdown: string;
+}
+
+export interface ResumeRewriteResponse {
+  run_id: string;
+  draft: ResumeRewriteDraft;
+}

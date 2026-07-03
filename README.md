@@ -3,7 +3,8 @@
 CareerPilot is an AI Agent workflow platform for internship and early-career job search preparation. It focuses on traceable, evidence-locked workflows: resume parsing, job analysis, matching, resume tailoring, approval, interview preparation, feedback, and evaluation.
 
 Week1 establishes the runnable project skeleton, Week2 adds structured resume/JD parsing,
-Week3 introduces the LoopEngine, and Week4 adds explainable resume/JD matching:
+Week3 introduces the LoopEngine, Week4 adds explainable resume/JD matching, and Week5
+adds evidence-locked resume rewrite drafts with approval-gated export:
 
 - Python/FastAPI backend
 - React + TypeScript frontend
@@ -15,6 +16,7 @@ Week3 introduces the LoopEngine, and Week4 adds explainable resume/JD matching:
 - LoopEngine with Plan / Execute / Verify / Reflect / Human Approval / Commit
 - Checkpoints, event stream, idempotency, and resume-from-failure scaffolding
 - MatchAgent with score breakdown, evidence mapping, gap analysis, and priority ranking
+- ResumeRewriteAgent with diff suggestions, evidence links, risk warnings, approval, and PDF export
 
 ## Start Backend
 
@@ -141,13 +143,41 @@ curl -X POST http://localhost:8000/api/matches \
   }'
 ```
 
+Create a Week5 rewrite draft from parsed profiles and a match profile:
+
+```bash
+curl -X POST http://localhost:8000/api/rewrite-drafts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "local-user",
+    "resume_profile": { "...": "ResumeProfile from Week2" },
+    "job_profile": { "...": "JobProfile from Week2" },
+    "match_profile": { "...": "MatchProfile from Week4" }
+  }'
+```
+
+Approve the draft before export:
+
+```bash
+curl -X POST http://localhost:8000/api/rewrite-drafts/{run_id}/approve \
+  -H "Content-Type: application/json" \
+  -d '{"approved_by":"local-user","notes":"证据真实，允许导出"}'
+```
+
+Export the approved draft:
+
+```bash
+curl http://localhost:8000/api/rewrite-drafts/{run_id}/export.pdf --output rewrite-draft.pdf
+```
+
 ## Current Limits
 
 - The run store is in memory. PostgreSQL repositories are planned for a production persistence phase.
 - LLM calls default to dry-run mode unless `LLM_API_KEY` is configured.
 - Week2 parser endpoints use a conservative heuristic parser in dry-run mode. Real LLM structured parsing is available once an OpenAI-compatible API key is configured.
 - Week3 event streaming currently returns existing events in SSE format. Continuous background streaming will become more useful after a queue/worker is introduced.
-- Artifact export, resume rewriting, browser tools, and evaluation harness are planned for later weeks.
+- Week5 PDF export is a dependency-free preview renderer. A production template renderer can replace it later.
+- Browser tools and evaluation harness are planned for later weeks.
 
 ## Safety Rule
 

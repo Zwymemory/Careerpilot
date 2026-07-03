@@ -1458,6 +1458,221 @@ h3 {
   font-weight: 760;
 }
 
+.rewrite-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 14px;
+}
+
+.rewrite-summary {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 10% 4%, rgba(255, 255, 255, 0.5), transparent 42%),
+    radial-gradient(circle at 94% 92%, rgba(121, 212, 181, 0.14), transparent 50%),
+    rgba(255, 255, 255, 0.22);
+  box-shadow: 0 16px 38px rgba(59, 111, 139, 0.08);
+}
+
+.rewrite-summary-empty {
+  align-content: center;
+  min-height: 220px;
+  opacity: 0.76;
+}
+
+.rewrite-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  align-items: start;
+  gap: 14px;
+}
+
+.rewrite-header h3 {
+  margin-bottom: 10px;
+  color: #172b3a;
+  line-height: 1.32;
+}
+
+.rewrite-status {
+  display: grid;
+  justify-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  border-radius: 8px;
+  padding: 10px;
+  background:
+    radial-gradient(circle at 35% 18%, rgba(255, 255, 255, 0.62), transparent 50%),
+    rgba(255, 255, 255, 0.24);
+}
+
+.rewrite-status span {
+  color: #7a4a00;
+  font-size: 10px;
+  font-weight: 860;
+}
+
+.rewrite-status strong {
+  margin-top: 6px;
+  color: #15212c;
+  font-size: 24px;
+}
+
+.rewrite-status small {
+  color: rgba(48, 72, 86, 0.62);
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.rewrite-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rewrite-metrics div {
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.rewrite-metrics span {
+  display: block;
+  color: rgba(48, 72, 86, 0.64);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rewrite-metrics strong {
+  display: block;
+  margin-top: 7px;
+  color: #172b3a;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.rewrite-change-list {
+  display: grid;
+  gap: 10px;
+}
+
+.rewrite-change {
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  border-radius: 8px;
+  padding: 12px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.1)),
+    rgba(255, 255, 255, 0.18);
+}
+
+.rewrite-change-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.rewrite-change-title strong {
+  color: #226a91;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.risk-pill {
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 820;
+  text-transform: uppercase;
+}
+
+.risk-low {
+  color: #1d5832;
+  background: rgba(220, 234, 223, 0.68);
+}
+
+.risk-medium {
+  color: #7a4a00;
+  background: rgba(255, 241, 214, 0.78);
+}
+
+.risk-high {
+  color: #7d2e24;
+  background: rgba(250, 220, 215, 0.78);
+}
+
+.diff-line {
+  margin: 0 0 6px;
+  border-left: 3px solid transparent;
+  padding-left: 9px;
+  color: rgba(31, 54, 69, 0.76);
+  line-height: 1.52;
+}
+
+.diff-remove {
+  border-color: rgba(184, 99, 90, 0.42);
+}
+
+.diff-add {
+  border-color: rgba(70, 169, 136, 0.48);
+  color: #172b3a;
+  font-weight: 720;
+}
+
+.rewrite-change p:not(.diff-line),
+.risk-list span {
+  color: rgba(31, 54, 69, 0.7);
+  line-height: 1.5;
+}
+
+.evidence-strip,
+.risk-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.evidence-strip span,
+.risk-list span {
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.23);
+  font-size: 12px;
+}
+
+.risk-list {
+  display: grid;
+}
+
+.rewrite-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 16% 10%, rgba(255, 255, 255, 0.5), transparent 36%),
+    rgba(255, 255, 255, 0.22);
+}
+
+.rewrite-side p {
+  margin-bottom: 0;
+  color: rgba(31, 54, 69, 0.72);
+  line-height: 1.56;
+}
+
+.rewrite-side .workflow-field {
+  width: 100%;
+}
+
 .trace-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 330px;
