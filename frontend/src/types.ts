@@ -174,3 +174,47 @@ export interface ParseJobResponse {
   profile: JobProfile;
   metadata: ParseMetadata;
 }
+
+export interface MatchEvidence {
+  requirement: string;
+  matched_resume_items: string[];
+  missing_terms: string[];
+  evidence: EvidenceItem[];
+  confidence: number;
+}
+
+export interface MatchGap {
+  requirement: string;
+  severity: "low" | "medium" | "high";
+  reason: string;
+  suggested_action: string;
+}
+
+export interface MatchPriority {
+  item: string;
+  priority: "P0" | "P1" | "P2";
+  reason: string;
+}
+
+export interface MatchScoreBreakdown {
+  hard_requirements: number;
+  nice_to_have: number;
+  responsibilities: number;
+  keyword_alignment: number;
+}
+
+export interface MatchProfile {
+  overall_score: number;
+  score_breakdown: MatchScoreBreakdown;
+  evidence_mapping: MatchEvidence[];
+  gaps: MatchGap[];
+  priority_ranking: MatchPriority[];
+  matched_keywords: string[];
+  missing_keywords: string[];
+  summary: string;
+}
+
+export interface MatchResponse {
+  run_id: string;
+  match: MatchProfile;
+}

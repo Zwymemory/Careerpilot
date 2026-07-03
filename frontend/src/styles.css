@@ -1099,6 +1099,10 @@ h3 {
   padding: 20px;
 }
 
+.workflow-panel-wide {
+  grid-column: 1 / -1;
+}
+
 .workflow-panel.liftable:hover {
   transform: translate3d(0, -5px, 0) rotateX(0.28deg);
 }
@@ -1262,6 +1266,191 @@ h3 {
 
 .loop-actions {
   align-items: center;
+}
+
+.match-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 14px;
+}
+
+.match-summary {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(255, 255, 255, 0.48), transparent 42%),
+    radial-gradient(circle at 94% 92%, rgba(95, 183, 207, 0.15), transparent 50%),
+    rgba(255, 255, 255, 0.22);
+  box-shadow: 0 16px 38px rgba(59, 111, 139, 0.08);
+}
+
+.match-summary-empty {
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+  min-height: 180px;
+  opacity: 0.76;
+}
+
+.match-topline {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.score-orb {
+  display: grid;
+  width: 74px;
+  height: 74px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 36% 24%, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.18) 68%),
+    rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 14px 34px rgba(58, 116, 145, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.74);
+}
+
+.score-orb-on {
+  color: #14354a;
+  background:
+    radial-gradient(circle at 34% 22%, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.16) 66%),
+    conic-gradient(from 210deg, rgba(68, 163, 201, 0.32), rgba(82, 196, 156, 0.34), rgba(238, 197, 112, 0.24), rgba(68, 163, 201, 0.32));
+}
+
+.score-orb strong {
+  align-self: end;
+  font-size: 25px;
+  line-height: 1;
+}
+
+.score-orb span {
+  align-self: start;
+  color: rgba(48, 72, 86, 0.64);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.match-summary h3 {
+  margin-bottom: 8px;
+  color: #172b3a;
+  line-height: 1.36;
+}
+
+.match-summary p,
+.match-side p {
+  margin-bottom: 0;
+  color: rgba(31, 54, 69, 0.72);
+  line-height: 1.56;
+}
+
+.match-breakdown {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.match-breakdown div,
+.mini-row {
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.match-breakdown div {
+  padding: 10px;
+}
+
+.match-breakdown span {
+  display: block;
+  color: rgba(48, 72, 86, 0.64);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.match-breakdown strong {
+  display: block;
+  margin-top: 7px;
+  color: #172b3a;
+  font-size: 20px;
+}
+
+.match-lists {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mini-row {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 9px 10px;
+}
+
+.mini-row strong {
+  color: #226a91;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.mini-row span {
+  min-width: 0;
+  color: rgba(31, 54, 69, 0.76);
+  overflow-wrap: anywhere;
+}
+
+.keyword-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.keyword-cloud span {
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.keyword-match {
+  color: #1d5832;
+  background: rgba(220, 234, 223, 0.62);
+}
+
+.keyword-missing {
+  color: #7a4a00;
+  background: rgba(255, 241, 214, 0.72);
+}
+
+.match-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 16% 10%, rgba(255, 255, 255, 0.5), transparent 36%),
+    rgba(255, 255, 255, 0.22);
+}
+
+.match-hint {
+  color: rgba(48, 72, 86, 0.62);
+  font-size: 12px;
+  font-weight: 760;
 }
 
 .trace-layout {

@@ -1,6 +1,9 @@
 import type {
+  JobProfile,
+  MatchResponse,
   ParseJobResponse,
   ParseResumeResponse,
+  ResumeProfile,
   RunDetail,
   RunSummary
 } from "../types";
@@ -94,6 +97,19 @@ export function resumeLoopRun(runId: string): Promise<RunDetail> {
   return request<RunDetail>(`/api/loop-runs/${runId}/resume`, {
     method: "POST",
     body: JSON.stringify({
+      user_id: "local-user"
+    })
+  });
+}
+
+export function createMatch(payload: {
+  resume_profile: ResumeProfile;
+  job_profile: JobProfile;
+}): Promise<MatchResponse> {
+  return request<MatchResponse>("/api/matches", {
+    method: "POST",
+    body: JSON.stringify({
+      ...payload,
       user_id: "local-user"
     })
   });

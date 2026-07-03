@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   approveLoopRun,
   createLoopRun,
+  createMatch,
   createRun,
   getRun,
   listRuns,
@@ -11,7 +12,13 @@ import {
   resumeLoopRun
 } from "./api/client";
 import { RunTrace } from "./components/RunTrace";
-import type { ParseJobResponse, ParseResumeResponse, RunDetail, RunSummary } from "./types";
+import type {
+  MatchResponse,
+  ParseJobResponse,
+  ParseResumeResponse,
+  RunDetail,
+  RunSummary
+} from "./types";
 
 const defaultGoal =
   "为 AI Agent 实习岗位生成可追踪运行计划，保留人工审批点和成本记录。";
@@ -23,6 +30,7 @@ const defaultJobText =
 type WorkflowAction =
   | "resume-parser"
   | "job-parser"
+  | "match-agent"
   | "loop-run"
   | "loop-approval"
   | "loop-resume";
@@ -52,6 +60,7 @@ export default function App() {
   const [jobText, setJobText] = useState(defaultJobText);
   const [resumeResult, setResumeResult] = useState<ParseResumeResponse | null>(null);
   const [jobResult, setJobResult] = useState<ParseJobResponse | null>(null);
+  const [matchResult, setMatchResult] = useState<MatchResponse | null>(null);
   const [workflowAction, setWorkflowAction] = useState<WorkflowAction | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [approvalNotes, setApprovalNotes] = useState("");
@@ -179,7 +188,7 @@ export default function App() {
 
     revealItems.forEach((item) => observer.observe(item));
     return () => observer.disconnect();
-  }, [activeRun, runs.length]);
+  }, [activeRun, runs.length, matchResult]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -562,6 +571,7 @@ export default function App() {
     try {
       const result = await parseResume(text);
       setResumeResult(result);
+      setMatchResult(null);
       await showRun(result.run_id);
       await refreshRuns();
       markRequestComplete();
@@ -585,6 +595,7 @@ export default function App() {
     try {
       const result = await parseJob(text);
       setJobResult(result);
+      setMatchResult(null);
       await showRun(result.run_id);
       await refreshRuns();
       markRequestComplete();
@@ -618,6 +629,31 @@ export default function App() {
       markRequestComplete();
     } catch (err) {
       setWorkflowError(err instanceof Error ? err.message : "LoopEngine run failed.");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleRunMatch() {
+    if (!resumeResult || !jobResult || workflowAction) {
+      setWorkflowError("MatchAgent needs both a parsed resume profile and a parsed JD profile.");
+      return;
+    }
+
+    setWorkflowAction("match-agent");
+    setWorkflowError(null);
+    clearCompletionPulse();
+    try {
+      const result = await createMatch({
+        resume_profile: resumeResult.profile,
+        job_profile: jobResult.profile
+      });
+      setMatchResult(result);
+      await showRun(result.run_id);
+      await refreshRuns();
+      markRequestComplete();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "MatchAgent failed.");
     } finally {
       setWorkflowAction(null);
     }
@@ -738,6 +774,7 @@ export default function App() {
   const activeStepCount = activeRun?.run.steps.length ?? latestSummary?.step_count ?? 0;
   const canApproveActiveRun = activeRun?.run.state === "WAITING_APPROVAL";
   const canResumeActiveRun = activeRun?.run.state === "FAILED";
+  const canRunMatch = Boolean(resumeResult && jobResult);
   const isModelWorking = isLoading || workflowAction !== null;
 
   return (
@@ -1001,6 +1038,36 @@ export default function App() {
               </button>
             </div>
           </section>
+
+          <section className="workflow-panel workflow-panel-wide scroll-fade glass-surface liftable">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Week4 MatchAgent</p>
+                <h2>Fit score · Evidence · Gaps</h2>
+              </div>
+              <span className="state-badge">W4</span>
+            </div>
+            <div className="match-workspace">
+              <MatchSummary result={matchResult} />
+              <div className="match-side">
+                <p>
+                  MatchAgent compares the parsed resume profile with the parsed JD profile, then
+                  ranks truthful rewrite priorities before Week5.
+                </p>
+                <button
+                  className="primary-action liftable"
+                  type="button"
+                  onClick={handleRunMatch}
+                  disabled={workflowAction !== null || !canRunMatch}
+                >
+                  {workflowAction === "match-agent" ? "Matching" : "Run match"}
+                </button>
+                {!canRunMatch ? (
+                  <span className="match-hint">Parse both resume and JD first.</span>
+                ) : null}
+              </div>
+            </div>
+          </section>
         </section>
 
         {workflowError ? <p className="error-text glass-surface revealable">{workflowError}</p> : null}
@@ -1117,6 +1184,97 @@ function WorkflowStat({ label, value }: { label: string; value: string }) {
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function MatchSummary({ result }: { result: MatchResponse | null }) {
+  if (!result) {
+    return (
+      <article className="match-summary match-summary-empty">
+        <div className="score-orb">
+          <strong>--</strong>
+          <span>score</span>
+        </div>
+        <div>
+          <p className="eyebrow">Awaiting MatchAgent</p>
+          <h3>Parse resume and JD, then run matching.</h3>
+          <p>Evidence mapping, missing keywords, and rewrite priorities will appear here.</p>
+        </div>
+      </article>
+    );
+  }
+
+  const { match } = result;
+  const breakdown = [
+    ["Hard", match.score_breakdown.hard_requirements],
+    ["Nice", match.score_breakdown.nice_to_have],
+    ["Resp", match.score_breakdown.responsibilities],
+    ["Keywords", match.score_breakdown.keyword_alignment]
+  ];
+  const topGaps = match.gaps.slice(0, 3);
+  const topPriorities = match.priority_ranking.slice(0, 3);
+
+  return (
+    <article className="match-summary">
+      <div className="match-topline">
+        <div className="score-orb score-orb-on">
+          <strong>{Math.round(match.overall_score)}</strong>
+          <span>score</span>
+        </div>
+        <div>
+          <p className="eyebrow">Match result</p>
+          <h3>{match.summary}</h3>
+          <div className="keyword-cloud">
+            {match.matched_keywords.slice(0, 6).map((keyword) => (
+              <span className="keyword-match" key={`match-${keyword}`}>
+                {keyword}
+              </span>
+            ))}
+            {match.missing_keywords.slice(0, 5).map((keyword) => (
+              <span className="keyword-missing" key={`missing-${keyword}`}>
+                {keyword}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="match-breakdown">
+        {breakdown.map(([label, value]) => (
+          <div key={label}>
+            <span>{label}</span>
+            <strong>{Number(value).toFixed(0)}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="match-lists">
+        <div>
+          <p className="eyebrow">Top gaps</p>
+          {topGaps.length ? (
+            topGaps.map((gap) => (
+              <div className="mini-row" key={gap.requirement}>
+                <strong>{gap.severity}</strong>
+                <span>{gap.requirement}</span>
+              </div>
+            ))
+          ) : (
+            <p>No critical gap detected.</p>
+          )}
+        </div>
+        <div>
+          <p className="eyebrow">Priorities</p>
+          {topPriorities.length ? (
+            topPriorities.map((priority) => (
+              <div className="mini-row" key={`${priority.priority}-${priority.item}`}>
+                <strong>{priority.priority}</strong>
+                <span>{priority.item}</span>
+              </div>
+            ))
+          ) : (
+            <p>No rewrite priority yet.</p>
+          )}
+        </div>
+      </div>
+    </article>
   );
 }
 
