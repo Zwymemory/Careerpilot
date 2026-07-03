@@ -292,6 +292,15 @@ export default function App() {
       pointer.y += (pointer.targetY - pointer.y) * 0.045;
 
       const audioLift = audioLevelRef.current;
+      const motion = modelMotionRef.current;
+      motion.intensity += ((motion.busy ? 1 : 0) - motion.intensity) * 0.055;
+      const burstElapsed = motion.burstStartedAt ? now - motion.burstStartedAt : 2200;
+      const burstLife = 1800;
+      const burstPhase = Math.max(0, Math.min(1, burstElapsed / burstLife));
+      const burst = Math.max(0, 1 - burstPhase);
+      const busy = motion.intensity;
+      const formation = Math.max(busy, burst);
+      const idleAudio = audioLift * (1 - Math.min(1, formation * 1.25));
       const base = context.createLinearGradient(0, 0, width, height);
       base.addColorStop(0, "#f8eee8");
       base.addColorStop(0.28, "#e8f4d7");
@@ -316,12 +325,12 @@ export default function App() {
           orbitY +
           pointer.y * (130 + index * 16) +
           pointer.scroll * height * 0.24;
-        const radius = Math.max(width, height) * (0.34 + index * 0.022 + audioLift * 0.035);
+        const radius = Math.max(width, height) * (0.34 + index * 0.022 + idleAudio * 0.035);
         const gradient = context.createRadialGradient(x, y, 0, x, y, radius);
         const hue = color.hue + Math.sin(t * 0.24 + index) * 14;
         gradient.addColorStop(
           0,
-          `hsla(${hue}, ${color.sat}%, ${color.light}%, ${0.46 + audioLift * 0.14})`,
+          `hsla(${hue}, ${color.sat}%, ${color.light}%, ${0.46 + idleAudio * 0.14})`,
         );
         gradient.addColorStop(0.45, `hsla(${hue}, ${color.sat}%, ${color.light}%, 0.24)`);
         gradient.addColorStop(1, `hsla(${hue}, ${color.sat}%, ${color.light}%, 0)`);
@@ -345,25 +354,24 @@ export default function App() {
         }
         context.lineWidth = Math.max(90, height * 0.14);
         context.lineCap = "round";
-        context.strokeStyle = `hsla(${hue}, 76%, 74%, ${0.11 + audioLift * 0.05})`;
+        context.strokeStyle = `hsla(${hue}, 76%, 74%, ${0.11 + idleAudio * 0.05})`;
         context.stroke();
       }
       context.restore();
 
-      const motion = modelMotionRef.current;
-      motion.intensity += ((motion.busy ? 1 : 0) - motion.intensity) * 0.055;
-      const burstElapsed = motion.burstStartedAt ? now - motion.burstStartedAt : 2200;
-      const burstLife = 1800;
-      const burstPhase = Math.max(0, Math.min(1, burstElapsed / burstLife));
-      const burst = Math.max(0, 1 - burstPhase);
-      const busy = motion.intensity;
-      const formation = Math.max(busy, burst);
       const centerX = width * (0.5 + pointer.x * 0.035);
       const centerY = height * (0.56 + pointer.y * 0.025 - pointer.scroll * 0.04);
 
       context.save();
       context.globalCompositeOperation = "source-over";
       particleFieldRef.current.forEach((particle, index) => {
+        const breath = 0.5 + Math.sin(t * (1.35 + particle.drift * 0.72) + particle.phase) * 0.5;
+        const flicker =
+          0.65 + Math.sin(t * (4.2 + particle.drift * 2.4) + particle.phase * 2.6) * 0.35;
+        const idlePresence = 1 - Math.min(1, formation);
+        const idleBreath = idlePresence * breath;
+        const idleFlicker = idlePresence * flicker;
+        const idlePulse = idleAudio * (0.68 + breath * 0.54 + flicker * 0.32);
         const bandCount = 7;
         const laneIndex = Math.floor(index / bandCount);
         const laneCount = Math.ceil(particleFieldRef.current.length / bandCount);
@@ -383,25 +391,27 @@ export default function App() {
           bandOffset * (4.2 + busy * 1.2) +
           shimmer;
 
-        const orbit = particle.phase + t * (0.16 + busy * 1.9) + index * 0.006;
+        const orbit = particle.phase + t * (0.16 + busy * 1.9 + idleAudio * 0.9) + index * 0.006;
         const baseX =
           particle.x * width +
-          Math.sin(t * 0.16 * particle.drift + particle.phase) * (22 + audioLift * 18) +
+          Math.sin(t * 0.16 * particle.drift + particle.phase) * (22 + idlePulse * 34) +
+          Math.sin(t * 2.2 + particle.phase * 1.8) * idlePulse * 18 +
           pointer.x * 34;
         const baseY =
           particle.y * height +
-          Math.cos(t * 0.13 * particle.drift + particle.phase * 1.4) * (22 + audioLift * 16) +
+          Math.cos(t * 0.13 * particle.drift + particle.phase * 1.4) * (22 + idlePulse * 28) +
+          Math.cos(t * 2.0 + particle.phase * 1.6) * idlePulse * 14 +
           pointer.y * 26 +
           pointer.scroll * height * 0.12;
         const pull = 0.1 + formation * 0.88;
         let x =
           baseX * (1 - pull) +
           rainbowX * pull +
-          Math.cos(orbit) * (busy * 18 + audioLift * 18) * particle.drift;
+          Math.cos(orbit) * (busy * 18 + idlePulse * 26) * particle.drift;
         let y =
           baseY * (1 - pull) +
           rainbowY * pull +
-          Math.sin(orbit * 1.16) * (busy * 14 + audioLift * 16) * particle.drift;
+          Math.sin(orbit * 1.16) * (busy * 14 + idlePulse * 22) * particle.drift;
 
         if (burst > 0) {
           const diagonal = Math.max(0, Math.min(1, (x / width + (height - y) / height) / 2));
@@ -417,10 +427,16 @@ export default function App() {
         }
 
         const opacity =
-          0.12 + audioLift * 0.04 + busy * 0.3 + burst * (0.2 + particle.drift * 0.08);
+          0.12 +
+          idleBreath * 0.055 +
+          idleFlicker * (0.028 + idleAudio * 0.16) +
+          busy * 0.3 +
+          burst * (0.2 + particle.drift * 0.08);
+        const particleRadius =
+          particle.size * (1 + idleBreath * 0.22 + idlePulse * 0.58) + busy * 0.95 + burst * 0.8;
         context.beginPath();
-        context.fillStyle = `hsla(${particle.hue}, 88%, ${52 + particle.band * 2}%, ${opacity})`;
-        context.arc(x, y, particle.size + busy * 0.95 + burst * 0.8, 0, Math.PI * 2);
+        context.fillStyle = `hsla(${particle.hue}, 88%, ${50 + particle.band * 2}%, ${opacity})`;
+        context.arc(x, y, particleRadius, 0, Math.PI * 2);
         context.fill();
 
         if ((index + Math.floor(t * 8)) % 23 === 0) {
@@ -430,7 +446,9 @@ export default function App() {
             x + Math.cos(orbit + Math.PI / 2) * (12 + busy * 34),
             y + Math.sin(orbit + Math.PI / 2) * (10 + busy * 30),
           );
-          context.strokeStyle = `hsla(${particle.hue}, 88%, 58%, ${0.055 + busy * 0.1 + burst * 0.08})`;
+          context.strokeStyle = `hsla(${particle.hue}, 88%, 58%, ${
+            0.055 + idleAudio * 0.12 + busy * 0.1 + burst * 0.08
+          })`;
           context.lineWidth = 0.8;
           context.stroke();
         }
@@ -444,7 +462,7 @@ export default function App() {
         context.beginPath();
         for (let x = -20; x <= width + 20; x += 22) {
           const wave =
-            Math.sin(x * 0.008 + t * 0.72 + row * 0.8) * (12 + audioLift * 8) +
+            Math.sin(x * 0.008 + t * 0.72 + row * 0.8) * (12 + idleAudio * 8) +
             Math.cos(x * 0.004 - t * 0.34 + row) * 9;
           if (x === -20) {
             context.moveTo(x, y + wave);
