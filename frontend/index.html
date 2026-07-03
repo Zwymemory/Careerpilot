@@ -12,7 +12,7 @@
         inset: 0;
         z-index: 9999;
         display: grid;
-        place-items: center;
+        grid-template-rows: 96px minmax(0, 1fr) 96px;
         color: rgba(20, 56, 39, 0.9);
         background:
           radial-gradient(circle at 47% 40%, rgba(180, 204, 235, 0.5), transparent 33%),
@@ -30,10 +30,58 @@
         pointer-events: none;
       }
 
+      html.initial-boot-lock,
+      body.initial-boot-lock {
+        overflow: hidden;
+      }
+
+      .initial-boot-rail {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 22px;
+        width: calc(100vw - 120px);
+        margin: 0 auto;
+        color: rgba(20, 56, 39, 0.84);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 14px;
+        font-weight: 760;
+        letter-spacing: 0.22em;
+      }
+
+      .initial-boot-rail-top {
+        align-self: end;
+      }
+
+      .initial-boot-rail-bottom {
+        align-self: start;
+      }
+
+      .initial-boot-rail i,
+      .initial-boot-center-line {
+        position: relative;
+        display: block;
+        height: 1px;
+        overflow: hidden;
+        background: rgba(20, 56, 39, 0.18);
+      }
+
+      .initial-boot-rail i b,
+      .initial-boot-center-line b {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: var(--initial-boot-progress, 0%);
+        background: rgba(20, 56, 39, 0.62);
+        transition: width 120ms linear;
+      }
+
       .initial-boot-card {
         display: grid;
+        align-self: center;
         justify-items: center;
-        gap: 10px;
+        gap: 12px;
+        width: min(520px, 70vw);
+        margin: 0 auto;
         font-family: Georgia, "Times New Roman", serif;
         font-size: clamp(42px, 5vw, 68px);
       }
@@ -44,13 +92,112 @@
         font-weight: 740;
         letter-spacing: 0.08em;
       }
+
+      .initial-boot-center-line {
+        width: min(420px, 46vw);
+        margin-top: 18px;
+      }
     </style>
-    <div id="initial-boot-loader">
+    <div id="initial-boot-loader" style="--initial-boot-progress: 0%">
+      <div class="initial-boot-rail initial-boot-rail-top">
+        <span>CAREERPILOT</span>
+        <i><b></b></i>
+        <span>2026</span>
+      </div>
       <div class="initial-boot-card">
         <span>CareerPilot</span>
         <small>LOADING</small>
+        <span class="initial-boot-center-line"><b></b></span>
+      </div>
+      <div class="initial-boot-rail initial-boot-rail-bottom">
+        <span>LOADING</span>
+        <i><b></b></i>
+        <span id="initial-boot-count">000</span>
       </div>
     </div>
+    <script>
+      (function () {
+        var loader = document.getElementById("initial-boot-loader");
+        var count = document.getElementById("initial-boot-count");
+        if (!loader || !count) return;
+
+        var startedAt = performance.now();
+        var progress = 0;
+        var removed = false;
+        var appMounted = false;
+        var minVisibleDuration = 1800;
+
+        function markAppMounted() {
+          appMounted = true;
+        }
+
+        function setProgress(value) {
+          progress = Math.max(progress, Math.min(100, Math.round(value)));
+          loader.style.setProperty("--initial-boot-progress", progress + "%");
+          count.textContent = String(progress).padStart(3, "0");
+        }
+
+        function removeLoader() {
+          if (removed) return;
+          removed = true;
+          setProgress(100);
+          document.documentElement.classList.remove("initial-boot-lock");
+          document.body.classList.remove("initial-boot-lock");
+          loader.classList.add("initial-boot-loader-hidden");
+          window.setTimeout(function () {
+            loader.remove();
+          }, 520);
+        }
+
+        function tick(now) {
+          if (removed) return;
+          var elapsed = now - startedAt;
+          var target = appMounted
+            ? Math.min(100, (elapsed / minVisibleDuration) * 100)
+            : Math.min(92, (elapsed / 4200) * 92);
+          setProgress(target);
+          if (appMounted && elapsed >= minVisibleDuration && progress >= 100) {
+            window.setTimeout(removeLoader, 120);
+            return;
+          }
+          requestAnimationFrame(tick);
+        }
+
+        function watchRoot() {
+          var root = document.getElementById("root");
+          if (!root) return;
+          if (root.childElementCount > 0) {
+            markAppMounted();
+            return;
+          }
+          var observer = new MutationObserver(function () {
+            if (root.childElementCount > 0) {
+              markAppMounted();
+              observer.disconnect();
+            }
+          });
+          observer.observe(root, { childList: true });
+          window.setTimeout(function () {
+            observer.disconnect();
+          }, 9000);
+        }
+
+        document.documentElement.classList.add("initial-boot-lock");
+        document.body.classList.add("initial-boot-lock");
+        window.addEventListener("careerpilot:app-mounted", markAppMounted);
+        window.addEventListener("load", markAppMounted, { once: true });
+        if (document.readyState === "complete") {
+          markAppMounted();
+        }
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", watchRoot, { once: true });
+        } else {
+          watchRoot();
+        }
+        window.setTimeout(removeLoader, 9000);
+        requestAnimationFrame(tick);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

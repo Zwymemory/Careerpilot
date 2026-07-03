@@ -9,3 +9,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <App />
   </React.StrictMode>
 );
+
+window.dispatchEvent(new Event("careerpilot:app-mounted"));

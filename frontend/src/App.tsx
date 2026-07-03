@@ -140,11 +140,11 @@ export default function App() {
   useEffect(() => {
     const initialLoader = document.getElementById("initial-boot-loader");
     if (initialLoader) {
-      initialLoader.classList.add("initial-boot-loader-hidden");
-      window.setTimeout(() => initialLoader.remove(), 520);
+      window.dispatchEvent(new Event("careerpilot:app-mounted"));
     }
 
     const minDuration = 1500;
+    const maxDuration = 6000;
     const startedAt = performance.now();
     let pageLoaded = document.readyState === "complete";
     let frame = 0;
@@ -156,6 +156,10 @@ export default function App() {
 
     const tick = (now: number) => {
       const elapsed = now - startedAt;
+      if (!pageLoaded && elapsed >= maxDuration) {
+        pageLoaded = true;
+      }
+
       const warmupProgress = Math.min(92, Math.round((elapsed / minDuration) * 92));
 
       if (!pageLoaded || elapsed < minDuration) {
