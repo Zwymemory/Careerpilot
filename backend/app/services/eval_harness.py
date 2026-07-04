@@ -1,5 +1,7 @@
+import json
 from html import escape
 
+from app.core.config import get_settings
 from app.schemas.application import ApplicationRecord
 from app.schemas.eval import (
     EvalArtifactType,
@@ -11,9 +13,13 @@ from app.schemas.eval import (
     QualityGateResult,
 )
 from app.schemas.interview import InterviewPack
+from app.schemas.llm import ChatMessage, LLMRequest
 from app.schemas.matching import MatchProfile
 from app.schemas.parser import JobProfile, ResumeProfile
 from app.schemas.rewrite import ResumeRewriteDraft
+from app.schemas.run import CostUsage
+from app.services.json_repair import JSONRepairError, repair_json_object
+from app.services.llm_client import LLMClient, LLMClientError
 from app.services.run_store import new_id
 
 
@@ -55,9 +61,31 @@ class EvalReportStore:
 
 
 class EvalHarness:
-    """Week9 rule-based evaluation harness with a deterministic LLM-judge placeholder."""
+    """Rule-based evaluation harness with an optional Week10 LLM judge."""
 
     def evaluate(self, payload: EvalRunRequest) -> EvalReport:
+        results, artifacts = self._collect_rule_results(payload)
+        if payload.judge_mode in {"llm_as_judge_dry_run", "llm_as_judge"}:
+            artifacts.append("judge")
+            results.append(self._dry_run_judge(results))
+        return self._build_report(payload, results, artifacts)
+
+    async def evaluate_async(self, payload: EvalRunRequest) -> EvalReport:
+        results, artifacts = self._collect_rule_results(payload)
+        judge_cost_usage: CostUsage | None = None
+        if payload.judge_mode == "llm_as_judge":
+            artifacts.append("judge")
+            judge_result, judge_cost_usage = await self._llm_judge_or_fallback(payload, results)
+            results.append(judge_result)
+        elif payload.judge_mode == "llm_as_judge_dry_run":
+            artifacts.append("judge")
+            results.append(self._dry_run_judge(results))
+        return self._build_report(payload, results, artifacts, judge_cost_usage)
+
+    def _collect_rule_results(
+        self,
+        payload: EvalRunRequest,
+    ) -> tuple[list[EvalRuleResult], list[EvalArtifactType]]:
         results: list[EvalRuleResult] = []
         artifacts: list[EvalArtifactType] = []
 
@@ -97,10 +125,15 @@ class EvalHarness:
                 )
             )
 
-        if payload.judge_mode == "llm_as_judge_dry_run":
-            artifacts.append("judge")
-            results.append(self._dry_run_judge(results))
+        return results, artifacts
 
+    def _build_report(
+        self,
+        payload: EvalRunRequest,
+        results: list[EvalRuleResult],
+        artifacts: list[EvalArtifactType],
+        judge_cost_usage: CostUsage | None = None,
+    ) -> EvalReport:
         overall_score = round(sum(result.score for result in results) / len(results), 2)
         gate = self._quality_gate(results, overall_score, payload.min_score)
         summary = self._summary(artifacts, gate, overall_score, results)
@@ -115,6 +148,7 @@ class EvalHarness:
             rule_results=results,
             summary=summary,
             html_report="",
+            judge_cost_usage=judge_cost_usage,
         )
         report.html_report = render_eval_html(report)
         return eval_report_store.save(report)
@@ -431,6 +465,126 @@ class EvalHarness:
                 missed,
             )
         ]
+
+    async def _llm_judge_or_fallback(
+        self,
+        payload: EvalRunRequest,
+        results: list[EvalRuleResult],
+    ) -> tuple[EvalRuleResult, CostUsage | None]:
+        settings = get_settings()
+        if settings.judge_dry_run or not settings.judge_api_key:
+            fallback = self._dry_run_judge(results)
+            fallback.rule_id = "judge.llm_not_configured"
+            fallback.name = "LLM-as-judge 未启用"
+            fallback.message = "真实 Judge 未启用，已使用规则评测 dry-run 兜底。"
+            return fallback, None
+
+        try:
+            response = await LLMClient(
+                settings,
+                provider=settings.judge_provider,
+                model=settings.judge_model,
+                base_url=settings.judge_base_url,
+                api_key=settings.judge_api_key,
+                dry_run=settings.judge_dry_run,
+            ).chat(
+                LLMRequest(
+                    messages=[
+                        ChatMessage(
+                            role="system",
+                            content=(
+                                "你是 CareerPilot 的质量评审模型。请只输出 JSON 对象，"
+                                "不要输出 Markdown。你要审查求职 Agent 产物是否证据锁定、"
+                                "是否存在编造经历、是否适合进入人工确认。"
+                                "不要因为分数高就放行无证据内容。"
+                            ),
+                        ),
+                        ChatMessage(
+                            role="user",
+                            content=self._judge_prompt(payload, results),
+                        ),
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.0,
+                    max_tokens=700,
+                )
+            )
+            parsed = repair_json_object(response.content).data
+            rule = self._judge_rule_from_data(parsed, response.model)
+            return rule, CostUsage(
+                provider=response.provider,
+                model=response.model,
+                prompt_tokens=response.usage.prompt_tokens,
+                completion_tokens=response.usage.completion_tokens,
+                total_tokens=response.usage.total_tokens,
+                latency_ms=response.latency_ms,
+                estimated_cost_cny=response.estimated_cost_cny,
+            )
+        except (JSONRepairError, LLMClientError, KeyError, TypeError, ValueError) as exc:
+            fallback = self._dry_run_judge(results)
+            fallback.rule_id = "judge.llm_fallback"
+            fallback.name = "LLM-as-judge 回退"
+            fallback.status = "warning"
+            fallback.severity = "warning"
+            fallback.score = min(fallback.score, 72)
+            fallback.message = f"真实 Judge 调用失败，已回退到规则评测：{exc}"
+            return fallback, None
+
+    @staticmethod
+    def _judge_prompt(payload: EvalRunRequest, results: list[EvalRuleResult]) -> str:
+        rule_lines = [
+            {
+                "rule_id": result.rule_id,
+                "category": result.category,
+                "status": result.status,
+                "severity": result.severity,
+                "score": result.score,
+                "message": result.message,
+                "evidence": result.evidence[:5],
+            }
+            for result in results
+        ]
+        return (
+            "请根据以下规则评测结果做二次审查。\n"
+            "输出 JSON schema："
+            '{"decision":"PASS|WARN|BLOCK","score":0-100,'
+            '"summary":"一句中文结论","warnings":["..."],"blocking_reasons":["..."]}\n'
+            f"case_name={payload.case_name}\n"
+            f"min_score={payload.min_score}\n"
+            f"expected_keywords={json.dumps(payload.expected_keywords, ensure_ascii=False)}\n"
+            f"required_sections={json.dumps(payload.required_sections, ensure_ascii=False)}\n"
+            f"rule_results={json.dumps(rule_lines, ensure_ascii=False)}"
+        )
+
+    def _judge_rule_from_data(self, data: dict, model: str) -> EvalRuleResult:
+        decision = str(data.get("decision", "WARN")).upper()
+        if decision not in {"PASS", "WARN", "BLOCK"}:
+            decision = "WARN"
+        score = float(data.get("score", 70))
+        summary = str(data.get("summary", "真实 Judge 已完成审查。")).strip()
+        warnings = [str(item) for item in data.get("warnings", []) if str(item).strip()]
+        blocking = [
+            str(item) for item in data.get("blocking_reasons", []) if str(item).strip()
+        ]
+        if decision == "BLOCK":
+            status = "failed"
+            severity = "critical"
+        elif decision == "WARN":
+            status = "warning"
+            severity = "warning"
+        else:
+            status = "passed"
+            severity = "info"
+        return self._rule(
+            "judge.llm",
+            "judge",
+            f"LLM-as-judge ({model})",
+            status,
+            severity,
+            score,
+            f"真实 Judge 判定：{summary}",
+            [*blocking[:4], *warnings[:6]],
+        )
 
     def _dry_run_judge(self, results: list[EvalRuleResult]) -> EvalRuleResult:
         failed = [result for result in results if result.status == "failed"]

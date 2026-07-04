@@ -8,6 +8,7 @@ from app.schemas.interview import InterviewPack
 from app.schemas.matching import MatchProfile
 from app.schemas.parser import JobProfile, ResumeProfile
 from app.schemas.rewrite import ResumeRewriteDraft
+from app.schemas.run import CostUsage
 
 EvalArtifactType = Literal[
     "parser",
@@ -20,7 +21,7 @@ EvalArtifactType = Literal[
 EvalRuleStatus = Literal["passed", "warning", "failed"]
 EvalRuleSeverity = Literal["info", "warning", "critical"]
 EvalGateDecision = Literal["PASS", "WARN", "BLOCK"]
-EvalJudgeMode = Literal["rule_based", "llm_as_judge_dry_run"]
+EvalJudgeMode = Literal["rule_based", "llm_as_judge_dry_run", "llm_as_judge"]
 
 
 class EvalRuleResult(BaseModel):
@@ -69,6 +70,7 @@ class EvalReport(BaseModel):
     rule_results: list[EvalRuleResult] = Field(default_factory=list)
     summary: str
     html_report: str
+    judge_cost_usage: CostUsage | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

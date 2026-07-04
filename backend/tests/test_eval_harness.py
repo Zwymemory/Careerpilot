@@ -26,13 +26,19 @@ from app.services.run_store import run_store
 def client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("LLM_DRY_RUN", "true")
     monkeypatch.setenv("LLM_API_KEY", "")
+    monkeypatch.setenv("JUDGE_DRY_RUN", "true")
+    monkeypatch.setenv("JUDGE_API_KEY", "")
+    monkeypatch.setenv("API_ACCESS_TOKEN", "")
+    monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "0")
     application_store.clear()
     eval_report_store.clear()
+    run_store.clear()
     get_settings.cache_clear()
     with TestClient(create_app()) as test_client:
         yield test_client
     application_store.clear()
     eval_report_store.clear()
+    run_store.clear()
     get_settings.cache_clear()
 
 
@@ -144,6 +150,50 @@ def test_eval_harness_endpoint_generates_quality_report(client: TestClient) -> N
     html_response = client.get(f"/api/evals/{report['report_id']}/report.html")
     assert html_response.status_code == 200
     assert "QualityGate" in html_response.text
+
+
+def test_eval_harness_llm_judge_falls_back_when_not_configured(client: TestClient) -> None:
+    payload = _eval_payload()
+    payload["judge_mode"] = "llm_as_judge"
+
+    response = client.post("/api/evals", json=payload)
+
+    assert response.status_code == 201
+    report = response.json()["report"]
+    assert report["judge_cost_usage"] is None
+    assert any(rule["rule_id"] == "judge.llm_not_configured" for rule in report["rule_results"])
+
+
+def test_production_readiness_and_cost_summary(client: TestClient) -> None:
+    readiness = client.get("/api/production/readiness")
+    assert readiness.status_code == 200
+    assert readiness.json()["auth_enabled"] is False
+
+    response = client.post("/api/evals", json=_eval_payload())
+    assert response.status_code == 201
+
+    costs = client.get("/api/production/cost-summary")
+    assert costs.status_code == 200
+    body = costs.json()
+    assert body["run_count"] >= 1
+    assert "by_model" in body
+
+
+def test_api_access_token_protects_non_health_routes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_DRY_RUN", "true")
+    monkeypatch.setenv("LLM_API_KEY", "")
+    monkeypatch.setenv("JUDGE_DRY_RUN", "true")
+    monkeypatch.setenv("JUDGE_API_KEY", "")
+    monkeypatch.setenv("API_ACCESS_TOKEN", "test-token")
+    monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "0")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as test_client:
+        assert test_client.get("/api/health").status_code == 200
+        assert test_client.get("/api/runs").status_code == 401
+        assert test_client.get("/api/runs", headers={"X-API-Key": "test-token"}).status_code == 200
+
+    get_settings.cache_clear()
 
 
 def test_quality_gate_blocks_unsupported_rewrite() -> None:

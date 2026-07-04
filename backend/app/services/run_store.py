@@ -6,8 +6,10 @@ from app.schemas.run import (
     AgentEvent,
     AgentRun,
     AgentStep,
+    CostSummary,
     CostUsage,
     EventType,
+    ModelCostSummary,
     RunState,
     RunSummary,
     StepStatus,
@@ -62,6 +64,54 @@ class RunStore:
 
     def get_run(self, run_id: str) -> AgentRun | None:
         return self._runs.get(run_id)
+
+    def clear(self) -> None:
+        self._runs.clear()
+        self._idempotency_index.clear()
+
+    def cost_summary(self) -> CostSummary:
+        costs = [cost for run in self._runs.values() for cost in run.costs]
+        by_model: dict[tuple[str, str], dict[str, int | float]] = {}
+        for cost in costs:
+            key = (cost.provider, cost.model)
+            bucket = by_model.setdefault(
+                key,
+                {
+                    "call_count": 0,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "estimated_cost_cny": 0.0,
+                },
+            )
+            bucket["call_count"] += 1
+            bucket["prompt_tokens"] += cost.prompt_tokens
+            bucket["completion_tokens"] += cost.completion_tokens
+            bucket["total_tokens"] += cost.total_tokens
+            bucket["estimated_cost_cny"] += cost.estimated_cost_cny
+
+        model_summaries = [
+            ModelCostSummary(
+                provider=provider,
+                model=model,
+                call_count=int(bucket["call_count"]),
+                prompt_tokens=int(bucket["prompt_tokens"]),
+                completion_tokens=int(bucket["completion_tokens"]),
+                total_tokens=int(bucket["total_tokens"]),
+                estimated_cost_cny=round(float(bucket["estimated_cost_cny"]), 6),
+            )
+            for (provider, model), bucket in sorted(by_model.items())
+        ]
+        return CostSummary(
+            run_count=len(self._runs),
+            cost_record_count=len(costs),
+            prompt_tokens=sum(cost.prompt_tokens for cost in costs),
+            completion_tokens=sum(cost.completion_tokens for cost in costs),
+            total_tokens=sum(cost.total_tokens for cost in costs),
+            estimated_cost_cny=round(sum(cost.estimated_cost_cny for cost in costs), 6),
+            by_model=model_summaries,
+            recent=sorted(costs, key=lambda item: item.created_at, reverse=True)[:8],
+        )
 
     def set_state(self, run_id: str, state: RunState, current_step: str | None = None) -> AgentRun:
         run = self._must_get(run_id)

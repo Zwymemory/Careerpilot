@@ -2865,7 +2865,7 @@ function EvalSummary({
         </div>
         <div>
           <span>模式</span>
-          <strong>{report.judge_mode === "rule_based" ? "规则" : "Judge"}</strong>
+          <strong>{formatEvalJudgeMode(report.judge_mode)}</strong>
         </div>
       </div>
 
@@ -2892,6 +2892,16 @@ function EvalSummary({
       ) : null}
     </article>
   );
+}
+
+function formatEvalJudgeMode(mode: string): string {
+  if (mode === "rule_based") {
+    return "规则";
+  }
+  if (mode === "llm_as_judge_dry_run") {
+    return "Judge Dry-run";
+  }
+  return "Judge";
 }
 
 function formatState(state: string): string {

@@ -16,6 +16,16 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 30
     llm_max_retries: int = 2
 
+    judge_dry_run: bool = True
+    judge_provider: str = "openai"
+    judge_model: str = "gpt-4.1-mini"
+    judge_base_url: str = "https://api.openai.com/v1"
+    judge_api_key: str | None = None
+
+    api_access_token: str | None = None
+    rate_limit_requests_per_minute: int = 180
+    security_headers_enabled: bool = True
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property

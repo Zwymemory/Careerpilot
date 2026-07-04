@@ -129,3 +129,24 @@ class RunDetail(BaseModel):
     run: AgentRun
     total_tokens: int
     total_cost_cny: float
+
+
+class ModelCostSummary(BaseModel):
+    provider: str
+    model: str
+    call_count: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    estimated_cost_cny: float
+
+
+class CostSummary(BaseModel):
+    run_count: int
+    cost_record_count: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    estimated_cost_cny: float
+    by_model: list[ModelCostSummary] = Field(default_factory=list)
+    recent: list[CostUsage] = Field(default_factory=list)

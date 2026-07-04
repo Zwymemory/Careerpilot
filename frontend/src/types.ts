@@ -449,7 +449,7 @@ export type EvalArtifactType =
 export type EvalRuleStatus = "passed" | "warning" | "failed";
 export type EvalRuleSeverity = "info" | "warning" | "critical";
 export type EvalGateDecision = "PASS" | "WARN" | "BLOCK";
-export type EvalJudgeMode = "rule_based" | "llm_as_judge_dry_run";
+export type EvalJudgeMode = "rule_based" | "llm_as_judge_dry_run" | "llm_as_judge";
 
 export interface EvalRuleResult {
   rule_id: string;
@@ -482,6 +482,7 @@ export interface EvalReport {
   rule_results: EvalRuleResult[];
   summary: string;
   html_report: string;
+  judge_cost_usage: CostUsage | null;
   created_at: string;
 }
 

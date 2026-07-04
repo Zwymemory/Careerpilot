@@ -3,8 +3,9 @@
 CareerPilot is an AI Agent workflow platform for internship and early-career job search preparation. It focuses on traceable, evidence-locked workflows: resume parsing, job analysis, matching, resume tailoring, approval, interview preparation, feedback, and evaluation.
 
 Week1 establishes the runnable project skeleton, Week2 adds structured resume/JD parsing,
-Week3 introduces the LoopEngine, Week4 adds explainable resume/JD matching, and Week5
-adds evidence-locked resume rewrite drafts with approval-gated export:
+Week3 introduces the LoopEngine, Week4 adds explainable resume/JD matching, Week5
+adds evidence-locked resume rewrite drafts with approval-gated export, and Weeks6-10
+complete the end-to-end job-search Agent workflow:
 
 - Python/FastAPI backend
 - React + TypeScript frontend
@@ -17,6 +18,35 @@ adds evidence-locked resume rewrite drafts with approval-gated export:
 - Checkpoints, event stream, idempotency, and resume-from-failure scaffolding
 - MatchAgent with score breakdown, evidence mapping, gap analysis, and priority ranking
 - ResumeRewriteAgent with diff suggestions, evidence links, risk warnings, approval, and PDF export
+- JobCollectorAgent with public-source safety checks, text/html/url collection, hashes, and optional screenshots
+- InterviewCoachAgent with realistic project questions, answer frameworks, and evidence warnings
+- ApplicationCRMAgent with application memory, next tasks, feedback, and status tracking
+- EvalHarness with QualityGate, HTML reports, optional LLM-as-Judge, and cost recording
+- Week10 production guard with optional API token auth, rate limiting, security headers, readiness, cost summary, Docker Compose, and demo script
+
+## Start with Docker Compose
+
+```bash
+cp backend/.env.example backend/.env
+docker compose up --build
+```
+
+The frontend will be available at `http://localhost:5173`, and the backend API will be
+available through the frontend container at `/api` and directly at `http://localhost:8000/api`.
+
+Useful production checks:
+
+```bash
+curl http://localhost:8000/api/health
+curl http://localhost:8000/api/production/readiness
+curl http://localhost:8000/api/production/cost-summary
+```
+
+Run the W10 smoke demo:
+
+```bash
+scripts/demo_w10.sh
+```
 
 ## Start Backend
 
@@ -40,6 +70,30 @@ npm run dev
 ```
 
 The app will be available at `http://localhost:5173`.
+
+When using Vite dev mode, keep the backend running at `http://localhost:8000`. If you need
+to point the frontend at another backend, set `VITE_API_BASE_URL`.
+
+## Production Settings
+
+`backend/.env` is local only and must not be committed. The most relevant W10 settings are:
+
+```env
+API_ACCESS_TOKEN=
+RATE_LIMIT_REQUESTS_PER_MINUTE=180
+SECURITY_HEADERS_ENABLED=true
+
+JUDGE_DRY_RUN=true
+JUDGE_PROVIDER=openai
+JUDGE_MODEL=gpt-4.1-mini
+JUDGE_BASE_URL=https://api.openai.com/v1
+JUDGE_API_KEY=
+```
+
+- Leave `API_ACCESS_TOKEN` empty for local development. Set it in shared/demo deployments.
+- Use `Authorization: Bearer <token>` or `X-API-Key: <token>` when auth is enabled.
+- `JUDGE_DRY_RUN=true` keeps QualityGate deterministic. Set it to `false` only when a real
+  OpenAI-compatible judge key is configured.
 
 ## API Demo
 
@@ -177,7 +231,8 @@ curl http://localhost:8000/api/rewrite-drafts/{run_id}/export.pdf --output rewri
 - Week2 parser endpoints use a conservative heuristic parser in dry-run mode. Real LLM structured parsing is available once an OpenAI-compatible API key is configured.
 - Week3 event streaming currently returns existing events in SSE format. Continuous background streaming will become more useful after a queue/worker is introduced.
 - Week5 PDF export is a dependency-free preview renderer. A production template renderer can replace it later.
-- Browser tools and evaluation harness are planned for later weeks.
+- The W10 rate limiter is in-process. Use Redis or gateway-level rate limiting for multi-instance deployments.
+- Docker Compose is a local/demo production shape. A real deployment still needs managed persistence, log retention, backup, and secret management.
 
 ## Safety Rule
 

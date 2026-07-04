@@ -25,7 +25,9 @@ async def run_eval(payload: EvalRunRequest) -> EvalRunResponse:
         ),
     )
 
-    report = eval_harness.evaluate(payload)
+    report = await eval_harness.evaluate_async(payload)
+    if report.judge_cost_usage:
+        run_store.record_cost(run.run_id, report.judge_cost_usage)
 
     run_store.complete_step(
         run.run_id,

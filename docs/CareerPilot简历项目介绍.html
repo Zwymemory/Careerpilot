@@ -139,7 +139,7 @@
 
         <p class="stack">
           技术栈：Python + FastAPI + React + TypeScript + Pydantic v2 + DeepSeek API +
-          ReportLab + Playwright(optional) + Run Trace
+          OpenAI-compatible API + ReportLab + Playwright(optional) + Docker Compose + Run Trace
         </p>
 
         <p class="summary">
@@ -174,9 +174,15 @@
             使 Agent 的执行状态、成本、证据和审批过程直观可见。
           </li>
           <li>
-            <strong>安全边界与真实性约束：</strong>浏览器收集工具默认不携带 Cookie/登录态，不访问
-            localhost/私有网段，不绕过验证码或平台限制；简历改写遵循 evidence-locked generation，
-            适合在面试中演示 AI Agent 的工具调用、状态机、审计链路和人类审批设计。
+            <strong>质量评测与成本可观测：</strong>实现 EvalHarness 和 QualityGate，对解析覆盖、
+            匹配证据、改写真实性、面试准备完整度和 CRM 记录质量进行评分；支持可选 LLM-as-Judge，
+            输出 PASS/WARN/BLOCK、HTML 报告，并记录 Judge token、延迟和成本。
+          </li>
+          <li>
+            <strong>生产化收尾与安全边界：</strong>补充 Docker Compose、API Token 鉴权、限流、
+            安全响应头、readiness 检查和成本汇总接口；浏览器收集工具默认不携带 Cookie/登录态，
+            不访问 localhost/私有网段，不绕过验证码或平台限制，适合演示 Agent 的工具边界、
+            审计链路和人类审批设计。
           </li>
         </ul>
       </article>

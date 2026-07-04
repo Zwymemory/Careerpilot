@@ -270,9 +270,9 @@ function localizeTraceText(text: string): string {
       (_, state: string) => `投递状态已更新为 ${formatApplicationStatus(state)}。`,
     )
     .replace(
-      /Run (rule_based|llm_as_judge_dry_run) evaluation with min score ([0-9.]+)\./g,
+      /Run (rule_based|llm_as_judge_dry_run|llm_as_judge) evaluation with min score ([0-9.]+)\./g,
       (_, mode: string, score: string) =>
-        `运行${mode === "rule_based" ? "规则评测" : "LLM-as-judge dry-run 评测"}，最低通过分 ${score}。`,
+        `运行${formatEvalMode(mode)}，最低通过分 ${score}。`,
     )
     .replace(
       /Evaluate CareerPilot artifacts for (.+)$/g,
@@ -306,6 +306,15 @@ function formatApplicationStatus(status: string): string {
     ARCHIVED: "已归档"
   };
   return labels[status] ?? titleizeToken(status);
+}
+
+function formatEvalMode(mode: string): string {
+  const labels: Record<string, string> = {
+    rule_based: "规则评测",
+    llm_as_judge_dry_run: "LLM-as-Judge dry-run 评测",
+    llm_as_judge: "LLM-as-Judge 评测"
+  };
+  return labels[mode] ?? titleizeToken(mode);
 }
 
 function formatCollectorSource(source: string): string {
