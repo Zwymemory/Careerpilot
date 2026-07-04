@@ -108,6 +108,8 @@ def test_interview_coach_agent_creates_evidence_locked_pack() -> None:
     assert pack.mock_score.overall_score > 50
     assert "CareerPilot 面试准备包" in pack.markdown
     assert any(question.category == "gap" for question in pack.predicted_questions)
+    assert any("技术难点" in question.question for question in pack.predicted_questions)
+    assert not any("如何满足" in question.question for question in pack.predicted_questions)
     assert any(
         "SQL" in warning or "Function Calling" in warning
         for warning in pack.evidence_warnings

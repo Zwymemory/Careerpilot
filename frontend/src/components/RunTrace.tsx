@@ -235,9 +235,9 @@ function localizeTraceText(text: string): string {
         `基于 ${projects} 个项目、${hard} 个硬性要求和 ${gaps} 个缺口生成面试准备包。`,
     )
     .replace(
-      /Created interview pack with (\d+) predicted question\(s\), (\d+) project follow-up\(s\), (\d+) STAR draft\(s\), and score ([0-9.]+)\/100\./g,
-      (_, questions: string, followups: string, stars: string, score: string) =>
-        `已生成面试包：${questions} 个预测题、${followups} 个项目追问、${stars} 个 STAR 草稿，准备分 ${score}/100。`,
+      /Created interview pack with (\d+) predicted question\(s\), (\d+) project follow-up\(s\), (\d+) answer framework\(s\), and score ([0-9.]+)\/100\./g,
+      (_, questions: string, followups: string, frameworks: string, score: string) =>
+        `已生成面试包：${questions} 个预测题、${followups} 个项目追问、${frameworks} 个回答框架，准备分 ${score}/100。`,
     )
     .replace("Interview pack generation failed.", "面试准备包生成失败。")
     .replace(

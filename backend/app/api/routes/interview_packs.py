@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, status
 
+from app.core.config import get_settings
 from app.schemas.interview import InterviewPackRequest, InterviewPackResponse
-from app.schemas.run import RunState
+from app.schemas.run import CostUsage, EventType, RunState
 from app.services.interview_coach_agent import InterviewCoachAgent
 from app.services.run_store import run_store
 
@@ -30,11 +31,12 @@ async def create_interview_pack(payload: InterviewPackRequest) -> InterviewPackR
     )
 
     try:
-        pack = InterviewCoachAgent().create_pack(
+        pack, llm_response, issues = await InterviewCoachAgent().create_pack_with_llm(
             payload.resume_profile,
             payload.job_profile,
             payload.match_profile,
             payload.rewrite_draft,
+            get_settings(),
         )
     except Exception as exc:  # noqa: BLE001 - route converts agent failures into trace + HTTP error.
         run_store.fail_step(run.run_id, step.step_id, str(exc))
@@ -43,15 +45,43 @@ async def create_interview_pack(payload: InterviewPackRequest) -> InterviewPackR
             detail="Interview pack generation failed.",
         ) from exc
 
+    cost_usage = (
+        CostUsage(
+            provider=llm_response.provider,
+            model=llm_response.model,
+            prompt_tokens=llm_response.usage.prompt_tokens,
+            completion_tokens=llm_response.usage.completion_tokens,
+            total_tokens=llm_response.usage.total_tokens,
+            latency_ms=llm_response.latency_ms,
+            estimated_cost_cny=llm_response.estimated_cost_cny,
+        )
+        if llm_response
+        else None
+    )
+    if llm_response:
+        run_store.add_event(
+            run.run_id,
+            EventType.LLM_CALL_COMPLETED,
+            "Interview questions refined with LLM.",
+            {
+                "model": llm_response.model,
+                "latency_ms": llm_response.latency_ms,
+                "issues": issues,
+            },
+        )
+
     run_store.complete_step(
         run.run_id,
         step.step_id,
         output_summary=(
             f"Created interview pack with {len(pack.predicted_questions)} predicted question(s), "
             f"{len(pack.project_followups)} project follow-up(s), "
-            f"{len(pack.star_answers)} STAR draft(s), and score "
+            f"{len(pack.star_answers)} answer framework(s), and score "
             f"{pack.mock_score.overall_score:.1f}/100."
         ),
+        latency_ms=llm_response.latency_ms if llm_response else None,
+        model=llm_response.model if llm_response else None,
+        cost_usage=cost_usage,
     )
     run_store.save_checkpoint(
         run.run_id,

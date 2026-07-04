@@ -1464,7 +1464,7 @@ export default function App() {
             <ProductStep
               index="05"
               title="准备面试"
-              text="生成面试题预测、项目追问、STAR 讲法和复习清单。"
+              text="生成真实面试风格的问题、项目追问、回答框架和复习清单。"
               active={Boolean(interviewResult)}
             />
             <ProductStep
@@ -1641,11 +1641,11 @@ export default function App() {
               <span className="state-badge">证据锁定</span>
             </div>
             <div className="interview-workspace">
-              <InterviewSummary result={interviewResult} />
+              <InterviewSummary result={interviewResult} mode="candidate" />
               <div className="interview-side">
                 <p>
-                  InterviewCoachAgent 会把简历证据、JD 要求、匹配缺口和改写草稿转成面试准备材料。
-                  它不会替你编故事，只会提示哪些内容已有证据，哪些需要先补真实练习。
+                  InterviewCoachAgent 会把简历证据、JD 要求、匹配缺口和改写草稿转成更接近真实面试的
+                  技术追问、项目追问和回答框架。
                 </p>
                 <button
                   className="primary-action liftable"
@@ -2060,16 +2060,16 @@ export default function App() {
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Week7 InterviewCoachAgent</p>
-                  <h2>面试题预测 · STAR 讲法 · 模拟评分</h2>
+                  <h2>面试题预测 · 项目回答框架 · 模拟评分</h2>
                 </div>
                 <span className="state-badge">W7</span>
               </div>
               <div className="interview-workspace">
-                <InterviewSummary result={interviewResult} />
+                <InterviewSummary result={interviewResult} mode="audit" />
                 <div className="interview-side">
                   <p>
                     W7 继承前面几周的证据链：W2 结构化输入、W4 缺口、W5 改写草稿。
-                    它把这些内容转成可练习的面试题、项目追问和 STAR 讲法，并保留 checkpoint。
+                    它把这些内容转成可练习的面试题、项目追问和项目回答框架，并保留 checkpoint。
                   </p>
                   <button
                     className="primary-action liftable"
@@ -2562,7 +2562,13 @@ function RewriteSummary({
   );
 }
 
-function InterviewSummary({ result }: { result: InterviewPackResponse | null }) {
+function InterviewSummary({
+  result,
+  mode = "candidate"
+}: {
+  result: InterviewPackResponse | null;
+  mode?: "candidate" | "audit";
+}) {
   if (!result) {
     return (
       <article className="interview-summary interview-summary-empty">
@@ -2573,7 +2579,7 @@ function InterviewSummary({ result }: { result: InterviewPackResponse | null }) 
         <div>
           <p className="eyebrow">等待 InterviewCoachAgent</p>
           <h3>先解析材料，再生成面试准备包。</h3>
-          <p>面试题预测、项目追问、STAR 讲法和复习清单会显示在这里。</p>
+          <p>真实面试风格的问题、项目追问、回答框架和复习清单会显示在这里。</p>
         </div>
       </article>
     );
@@ -2640,10 +2646,10 @@ function InterviewSummary({ result }: { result: InterviewPackResponse | null }) 
 
       <div className="interview-section-grid">
         <section>
-          <p className="eyebrow">STAR 讲法</p>
+          <p className="eyebrow">项目回答框架</p>
           {topStars.map((answer) => (
             <div className="interview-card" key={answer.prompt}>
-              <span>真实经历</span>
+              <span>按背景 · 任务 · 行动 · 结果组织</span>
               <strong>{answer.prompt}</strong>
               <p>{answer.action}</p>
             </div>
@@ -2661,9 +2667,9 @@ function InterviewSummary({ result }: { result: InterviewPackResponse | null }) 
         </section>
       </div>
 
-      {pack.evidence_warnings.length ? (
+      {mode === "audit" && pack.evidence_warnings.length ? (
         <div className="risk-list">
-          <p className="eyebrow">真实性提醒</p>
+          <p className="eyebrow">证据风险</p>
           {pack.evidence_warnings.slice(0, 4).map((warning) => (
             <span key={warning}>{warning}</span>
           ))}

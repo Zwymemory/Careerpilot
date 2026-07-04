@@ -1,3 +1,8 @@
+import json
+
+from pydantic import ValidationError
+
+from app.core.config import Settings
 from app.schemas.interview import (
     InterviewPack,
     InterviewQuestion,
@@ -7,18 +12,21 @@ from app.schemas.interview import (
     ProjectFollowUp,
     StarAnswerDraft,
 )
+from app.schemas.llm import ChatMessage, LLMRequest, LLMResponse
 from app.schemas.matching import MatchProfile
 from app.schemas.parser import EvidenceItem, JobProfile, ResumeProfile, ResumeProject
 from app.schemas.rewrite import ResumeRewriteDraft
+from app.services.json_repair import JSONRepairError, repair_json_object
+from app.services.llm_client import LLMClient, LLMClientError
 from app.services.run_store import new_id
 
 
 class InterviewCoachAgent:
     """Week7 evidence-locked interview preparation agent.
 
-    The first pass is deterministic: it predicts questions and drafts STAR speaking notes from
-    parsed resume/JD evidence. Missing proof stays as a review warning instead of becoming a
-    fabricated story.
+    The first pass is deterministic: it predicts realistic project interview questions and
+    drafts evidence-locked speaking notes from parsed resume/JD evidence. Missing proof stays
+    as a review warning instead of becoming a fabricated story.
     """
 
     def create_pack(
@@ -51,6 +59,51 @@ class InterviewCoachAgent:
         pack.markdown = render_interview_pack_markdown(pack)
         return pack
 
+    async def create_pack_with_llm(
+        self,
+        resume: ResumeProfile,
+        job: JobProfile,
+        match: MatchProfile | None,
+        rewrite: ResumeRewriteDraft | None,
+        settings: Settings,
+    ) -> tuple[InterviewPack, LLMResponse | None, list[str]]:
+        pack = self.create_pack(resume, job, match, rewrite)
+        if settings.llm_dry_run or not settings.llm_api_key:
+            return pack, None, ["llm_interview_refinement_skipped_dry_run"]
+
+        response: LLMResponse | None = None
+        try:
+            response = await LLMClient(settings).chat(
+                LLMRequest(
+                    messages=[
+                        ChatMessage(role="system", content=_interview_system_prompt()),
+                        ChatMessage(
+                            role="user",
+                            content=json.dumps(
+                                _interview_prompt_payload(resume, job, match, rewrite, pack),
+                                ensure_ascii=False,
+                            ),
+                        ),
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.25,
+                    max_tokens=2800,
+                )
+            )
+            repaired = repair_json_object(response.content)
+            pack = _apply_llm_interview_refinement(pack, repaired.data, resume, job, match)
+            issues = [f"llm_interview_refinement:{issue}" for issue in repaired.issues]
+            return pack, response, issues
+        except (JSONRepairError, LLMClientError, ValidationError, KeyError, ValueError) as exc:
+            pack.evidence_warnings = _unique(
+                [
+                    *pack.evidence_warnings,
+                    f"LLM 面试题增强失败，已回退到本地真实面试模板：{exc}",
+                ]
+            )[:8]
+            pack.markdown = render_interview_pack_markdown(pack)
+            return pack, response, ["llm_interview_refinement_fallback"]
+
     def _questions(
         self,
         resume: ResumeProfile,
@@ -60,14 +113,63 @@ class InterviewCoachAgent:
     ) -> list[InterviewQuestion]:
         questions: list[InterviewQuestion] = []
         role = job.title or "目标岗位"
+        for project in resume.projects[:3]:
+            evidence = project.evidence or [
+                EvidenceItem(
+                    field_path="projects",
+                    source_text=project.description,
+                    confidence=0.66,
+                )
+            ]
+            questions.extend(
+                [
+                    InterviewQuestion(
+                        question_id=new_id("question"),
+                        category="project",
+                        question=(
+                            f"请结合 {project.name}，讲一次你遇到的核心技术难点："
+                            "当时问题是什么，你怎么定位，最后怎么验证？"
+                        ),
+                        why_asked=f"{role} 面试常会追问真实项目中的问题定位和复盘能力。",
+                        suggested_angle=(
+                            "按背景、现象、定位路径、解决方案、验证结果讲；不要只罗列技术栈。"
+                        ),
+                        priority="P0",
+                        evidence=evidence[:4],
+                    ),
+                    InterviewQuestion(
+                        question_id=new_id("question"),
+                        category="system_design",
+                        question=(
+                            f"如果让你重新设计 {project.name} 的接口、数据流或 Agent 流程，"
+                            "你会改哪一处？为什么？"
+                        ),
+                        why_asked="这类追问会考察架构取舍、边界意识和迭代能力。",
+                        suggested_angle=(
+                            "先说明原设计约束，再讲可替代方案、代价、风险和如何验证改动收益。"
+                        ),
+                        priority="P0",
+                        evidence=evidence[:4],
+                    ),
+                ]
+            )
+
         for requirement in job.hard_requirements[:4]:
             evidence = _evidence_for_text(resume, requirement)
+            if not evidence:
+                continue
             questions.append(
                 InterviewQuestion(
                     question_id=new_id("question"),
                     category="technical",
-                    question=f"请结合你的项目经历，说明你如何满足“{requirement}”这个要求？",
-                    why_asked=f"这是 {role} 的硬性要求，面试官通常会验证真实使用深度。",
+                    question=(
+                        f"请结合一个真实项目，说明你在哪里用过 {requirement}，"
+                        "当时解决了什么工程问题？"
+                    ),
+                    why_asked=(
+                        f"{requirement} 是 {role} 的岗位信号，"
+                        "面试官会验证使用深度而非关键词熟悉度。"
+                    ),
                     suggested_angle=_angle_from_evidence(evidence, requirement),
                     priority="P0",
                     evidence=evidence[:4],
@@ -80,10 +182,10 @@ class InterviewCoachAgent:
                 InterviewQuestion(
                     question_id=new_id("question"),
                     category="system_design",
-                    question=f"如果让你落地这项职责：{responsibility}，你会如何拆解方案？",
+                    question=f"这份 JD 提到“{responsibility}”。你做过哪些相近部分？边界在哪里？",
                     why_asked="职责类问题会考察工程拆解、边界意识和交付路径。",
                     suggested_angle=(
-                        "先讲目标和约束，再讲模块拆分、数据流、失败处理与验证方式。"
+                        "先讲相近项目中的真实模块，再说明未覆盖部分、可迁移经验和补强计划。"
                     ),
                     priority="P1",
                     evidence=evidence[:4],
@@ -96,7 +198,10 @@ class InterviewCoachAgent:
                     InterviewQuestion(
                         question_id=new_id("question"),
                         category="gap",
-                        question=f"如果面试官追问“{gap.requirement}”，你准备如何诚实回答？",
+                        question=(
+                            f"JD 提到“{gap.requirement}”。你目前有哪些相近基础？"
+                            "如果现场被追问，你会如何说明边界和补强计划？"
+                        ),
                         why_asked="这是当前匹配报告中的能力缺口，需要准备真实边界和补强计划。",
                         suggested_angle=(
                             "先说明已有相近经验，再明确不会夸大；最后给出正在补齐的学习或实践计划。"
@@ -114,7 +219,10 @@ class InterviewCoachAgent:
                 InterviewQuestion(
                     question_id=new_id("question"),
                     category="gap",
-                    question=f"JD 关注 {keyword}，如果被问到你是否熟悉，应该怎么回答？",
+                    question=(
+                        f"如果面试官追问 {keyword}，你能用哪个项目证明？"
+                        "如果不能，准备怎么诚实回答？"
+                    ),
                     why_asked="关键词出现在 JD 中，但当前简历证据不足。",
                     suggested_angle="不要硬说精通；说明了解范围、可迁移经验和下一步补强计划。",
                     priority="P1",
@@ -184,7 +292,7 @@ class InterviewCoachAgent:
             ]
             answers.append(
                 StarAnswerDraft(
-                    prompt=f"请用 STAR 讲一下你最能支撑 {role} 的项目：{project.name}",
+                    prompt=f"请讲一个最能支撑 {role} 的项目：{project.name}",
                     situation=f"围绕 {project.name} 项目，背景是：{project.description}",
                     task=(
                         "你的任务是把项目目标、个人职责和岗位相关能力讲清楚，尤其突出可验证产出。"
@@ -211,7 +319,7 @@ class InterviewCoachAgent:
                 ]
                 answers.append(
                     StarAnswerDraft(
-                        prompt=f"请用 STAR 讲一下你在 {experience.title} 中的真实贡献。",
+                        prompt=f"请讲一下你在 {experience.title} 中的真实贡献。",
                         situation=experience.company or "一段真实经历",
                         task="说明当时目标、限制和你的责任。",
                         action=experience.description,
@@ -261,7 +369,7 @@ class InterviewCoachAgent:
     ) -> list[str]:
         warnings: list[str] = []
         if not resume.projects and not resume.experiences:
-            warnings.append("当前简历缺少项目或经历证据，STAR 回答只能作为结构模板。")
+            warnings.append("当前简历缺少项目或经历证据，项目回答框架只能作为结构模板。")
         if match:
             warnings.extend(
                 f"{gap.requirement}: {gap.suggested_action}"
@@ -322,7 +430,7 @@ class InterviewCoachAgent:
                 MockInterviewDimension(
                     name="表达准备度",
                     score=speaking_score,
-                    feedback="STAR 草稿和项目追问数量越充分，现场表达越稳定。",
+                    feedback="项目回答框架和项目追问数量越充分，现场表达越稳定。",
                 ),
                 MockInterviewDimension(
                     name="技术复习度",
@@ -372,16 +480,16 @@ def render_interview_pack_markdown(pack: InterviewPack) -> str:
         )
         lines.extend(f"  - 风险：{flag}" for flag in item.risk_flags)
 
-    lines.extend(["", "## STAR 回答草稿"])
+    lines.extend(["", "## 项目回答框架"])
     for item in pack.star_answers:
         lines.extend(
             [
                 "",
                 f"### {item.prompt}",
-                f"- S：{item.situation}",
-                f"- T：{item.task}",
-                f"- A：{item.action}",
-                f"- R：{item.result}",
+                f"- 背景：{item.situation}",
+                f"- 任务：{item.task}",
+                f"- 行动：{item.action}",
+                f"- 结果：{item.result}",
             ]
         )
         lines.extend(f"- 风险：{note}" for note in item.risk_notes)
@@ -395,6 +503,224 @@ def render_interview_pack_markdown(pack: InterviewPack) -> str:
         lines.extend(["", "## 真实性提醒"])
         lines.extend(f"- {warning}" for warning in pack.evidence_warnings)
     return "\n".join(lines)
+
+
+def _interview_system_prompt() -> str:
+    return (
+        "You are CareerPilot InterviewCoachAgent. Return only one JSON object. "
+        "Write in Chinese, but keep technical keywords like Python, FastAPI, SQL, "
+        "Function Calling, PostgreSQL, RAG, AI Agent in English. Generate realistic "
+        "Chinese tech internship interview prep, not keyword checklist questions. "
+        "Questions should sound like real interviewers: project difficulty, debugging, "
+        "tradeoffs, API/data-flow design, validation, failure handling, team boundary, "
+        "and what the candidate would improve. Avoid wording like 'how do you satisfy X'. "
+        "Never invent experience, metrics, employers, production scale, or unsupported skills. "
+        "If evidence is missing, ask about boundary and learning plan. "
+        "Do not use the word STAR in user-facing text; use project answer framework language. "
+        "Schema: {predicted_questions:[{category:'technical|project|behavioral|gap|system_design',"
+        "question:string,why_asked:string,suggested_angle:string,priority:'P0|P1|P2'}],"
+        "project_followups:[{project_name:string,question:string,probe_focus:string,risk_flags:string[]}],"
+        "answer_frameworks:[{prompt:string,situation:string,task:string,action:string,result:string,"
+        "risk_notes:string[]}],knowledge_points:[{topic:string,why_matters:string,"
+        "current_signal:'covered|partial|gap',review_prompt:string}]}."
+    )
+
+
+def _interview_prompt_payload(
+    resume: ResumeProfile,
+    job: JobProfile,
+    match: MatchProfile | None,
+    rewrite: ResumeRewriteDraft | None,
+    pack: InterviewPack,
+) -> dict:
+    return {
+        "resume_profile": resume.model_dump(mode="json"),
+        "job_profile": job.model_dump(mode="json"),
+        "match_profile": match.model_dump(mode="json") if match else None,
+        "rewrite_draft": rewrite.model_dump(mode="json") if rewrite else None,
+        "local_pack_seed": {
+            "target_keywords": pack.target_keywords,
+            "predicted_questions": [
+                question.model_dump(mode="json", exclude={"evidence"})
+                for question in pack.predicted_questions[:8]
+            ],
+            "project_followups": [
+                followup.model_dump(mode="json", exclude={"evidence"})
+                for followup in pack.project_followups[:6]
+            ],
+            "answer_frameworks": [
+                answer.model_dump(mode="json", exclude={"evidence"})
+                for answer in pack.star_answers[:4]
+            ],
+            "knowledge_points": [
+                point.model_dump(mode="json", exclude={"evidence"})
+                for point in pack.knowledge_points[:8]
+            ],
+        },
+    }
+
+
+def _apply_llm_interview_refinement(
+    pack: InterviewPack,
+    data: dict,
+    resume: ResumeProfile,
+    job: JobProfile,
+    match: MatchProfile | None,
+) -> InterviewPack:
+    questions = _llm_questions(data.get("predicted_questions"), resume)
+    followups = _llm_followups(data.get("project_followups"), resume, job)
+    answer_frameworks = _llm_answer_frameworks(
+        data.get("answer_frameworks") or data.get("star_answers"),
+        resume,
+        job,
+    )
+    knowledge_points = _llm_knowledge_points(data.get("knowledge_points"), resume)
+
+    if questions:
+        pack.predicted_questions = _dedupe_questions(questions)[:10]
+    if followups:
+        pack.project_followups = followups[:8]
+    if answer_frameworks:
+        pack.star_answers = answer_frameworks[:5]
+    if knowledge_points:
+        pack.knowledge_points = knowledge_points[:10]
+
+    pack.evidence_warnings = InterviewCoachAgent()._evidence_warnings(
+        resume,
+        job,
+        match,
+        pack.star_answers,
+    )
+    pack.mock_score = InterviewCoachAgent()._score(
+        resume,
+        job,
+        match,
+        pack.project_followups,
+        pack.star_answers,
+        pack.knowledge_points,
+    )
+    pack.markdown = render_interview_pack_markdown(pack)
+    return pack
+
+
+def _llm_questions(value, resume: ResumeProfile) -> list[InterviewQuestion]:
+    if not isinstance(value, list):
+        return []
+    questions: list[InterviewQuestion] = []
+    allowed_categories = {"technical", "project", "behavioral", "gap", "system_design"}
+    for item in value:
+        if not isinstance(item, dict) or not item.get("question"):
+            continue
+        question_text = str(item["question"]).strip()
+        category = item.get("category") if item.get("category") in allowed_categories else "project"
+        priority = item.get("priority") if item.get("priority") in {"P0", "P1", "P2"} else "P1"
+        payload = {
+            "question_id": new_id("question"),
+            "category": category,
+            "question": question_text,
+            "why_asked": str(
+                item.get("why_asked") or "真实面试会通过这个问题验证项目深度和岗位匹配。"
+            ),
+            "suggested_angle": str(
+                item.get("suggested_angle")
+                or "结合真实项目讲问题背景、个人行动、验证方式和边界。"
+            ),
+            "priority": priority,
+            "evidence": _evidence_for_text(
+                resume,
+                " ".join([question_text, str(item.get("suggested_angle") or "")]),
+            )[:4],
+        }
+        questions.append(InterviewQuestion.model_validate(payload))
+    return questions
+
+
+def _llm_followups(value, resume: ResumeProfile, job: JobProfile) -> list[ProjectFollowUp]:
+    if not isinstance(value, list):
+        return []
+    project_names = [project.name for project in resume.projects] or [job.title or "目标岗位"]
+    followups: list[ProjectFollowUp] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict) or not item.get("question"):
+            continue
+        project_name = str(item.get("project_name") or project_names[index % len(project_names)])
+        question = str(item["question"]).strip()
+        evidence = _project_evidence(resume, project_name) or _evidence_for_text(resume, question)
+        followups.append(
+            ProjectFollowUp(
+                project_name=project_name,
+                question=question,
+                probe_focus=str(
+                    item.get("probe_focus") or "项目背景、技术取舍、问题定位、验证方式"
+                ),
+                evidence=evidence[:4],
+                risk_flags=[
+                    str(flag)
+                    for flag in item.get("risk_flags", [])
+                    if isinstance(flag, str) and flag.strip()
+                ][:3],
+            )
+        )
+    return followups
+
+
+def _llm_answer_frameworks(
+    value,
+    resume: ResumeProfile,
+    job: JobProfile,
+) -> list[StarAnswerDraft]:
+    if not isinstance(value, list):
+        return []
+    frameworks: list[StarAnswerDraft] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        prompt = str(item.get("prompt") or f"请讲一个最能支撑 {job.title or '目标岗位'} 的项目。")
+        evidence = _evidence_for_text(resume, prompt)
+        frameworks.append(
+            StarAnswerDraft(
+                prompt=prompt.replace("STAR", "项目回答框架"),
+                situation=str(item.get("situation") or "说明项目背景、目标用户和当时约束。"),
+                task=str(item.get("task") or "说明你的具体职责、要解决的问题和成功标准。"),
+                action=str(item.get("action") or "按技术方案、关键实现、调试过程和验证方式展开。"),
+                result=str(item.get("result") or "只总结已有证据支持的产出和可展示材料。"),
+                evidence=evidence[:4],
+                risk_notes=[
+                    str(note)
+                    for note in item.get("risk_notes", [])
+                    if isinstance(note, str) and note.strip()
+                ][:4],
+            )
+        )
+    return frameworks
+
+
+def _llm_knowledge_points(value, resume: ResumeProfile) -> list[KnowledgePoint]:
+    if not isinstance(value, list):
+        return []
+    points: list[KnowledgePoint] = []
+    allowed_signals = {"covered", "partial", "gap"}
+    for item in value:
+        if not isinstance(item, dict) or not item.get("topic"):
+            continue
+        topic = str(item["topic"]).strip()
+        evidence = _evidence_for_text(resume, topic)
+        signal = item.get("current_signal")
+        if signal not in allowed_signals:
+            signal = "covered" if evidence else "partial"
+        points.append(
+            KnowledgePoint(
+                topic=topic,
+                why_matters=str(item.get("why_matters") or f"{topic} 是目标岗位的高频追问信号。"),
+                current_signal=signal,
+                review_prompt=str(
+                    item.get("review_prompt")
+                    or f"准备讲清 {topic} 在项目中的使用位置、问题和验证方式。"
+                ),
+                evidence=evidence[:3],
+            )
+        )
+    return points
 
 
 def _target_keywords(
@@ -435,6 +761,19 @@ def _evidence_for_text(resume: ResumeProfile, text: str) -> list[EvidenceItem]:
     return _unique_evidence(evidence)
 
 
+def _project_evidence(resume: ResumeProfile, project_name: str) -> list[EvidenceItem]:
+    for project in resume.projects:
+        if project.name.lower() == project_name.lower():
+            return project.evidence or [
+                EvidenceItem(
+                    field_path="projects",
+                    source_text=project.description,
+                    confidence=0.66,
+                )
+            ]
+    return []
+
+
 def _angle_from_evidence(evidence: list[EvidenceItem], requirement: str) -> str:
     if evidence:
         return (
@@ -455,7 +794,7 @@ def _project_risk_notes(project: ResumeProject, job: JobProfile) -> list[str]:
 def _strengths(resume: ResumeProfile, job: JobProfile, match: MatchProfile | None) -> list[str]:
     strengths = []
     if resume.projects:
-        strengths.append(f"有 {len(resume.projects)} 个项目可用于讲 STAR 和技术追问。")
+        strengths.append(f"有 {len(resume.projects)} 个项目可用于项目讲法和技术追问。")
     if match and match.matched_keywords:
         strengths.append(f"已匹配关键词：{'、'.join(match.matched_keywords[:6])}。")
     elif job.tech_keywords:
