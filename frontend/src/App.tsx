@@ -1592,7 +1592,7 @@ export default function App() {
               <span className="state-badge">人工确认</span>
             </div>
             <div className="product-column">
-              <RewriteSummary result={rewriteResult} />
+              <RewriteSummary result={rewriteResult} mode="candidate" />
               <label className="workflow-field workflow-field-compact">
                 <span>审批备注</span>
                 <textarea
@@ -2020,7 +2020,7 @@ export default function App() {
                 <span className="state-badge">W5</span>
               </div>
               <div className="rewrite-workspace">
-                <RewriteSummary result={rewriteResult} />
+                <RewriteSummary result={rewriteResult} mode="audit" />
                 <div className="rewrite-side">
                   <p>
                     ResumeRewriteAgent 会把 W4 的缺口和证据映射转成可审阅的简历改写建议。
@@ -2429,14 +2429,24 @@ function MatchSummary({ result }: { result: MatchResponse | null }) {
   );
 }
 
-function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
+function RewriteSummary({
+  result,
+  mode = "candidate"
+}: {
+  result: ResumeRewriteResponse | null;
+  mode?: "candidate" | "audit";
+}) {
   if (!result) {
     return (
       <article className="rewrite-summary rewrite-summary-empty">
         <div>
           <p className="eyebrow">等待 ResumeRewriteAgent</p>
-          <h3>先完成匹配，再生成证据锁定的改写草稿。</h3>
-          <p>Diff、关联证据、审批状态和风险提示会显示在这里。</p>
+          <h3>先完成匹配，再生成证据锁定的中文投递稿。</h3>
+          <p>
+            {mode === "audit"
+              ? "Diff、关联证据、审批状态和风险提示会显示在这里。"
+              : "简历标题、个人概要、核心技能和项目经历会显示在这里。"}
+          </p>
         </div>
       </article>
     );
@@ -2444,6 +2454,7 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
 
   const { draft } = result;
   const tailored = draft.tailored_resume;
+  const showAudit = mode === "audit" || !tailored;
   const topChanges = draft.changes.slice(0, 5);
   const evidenceCount = draft.changes.reduce((sum, change) => sum + change.evidence.length, 0);
 
@@ -2464,29 +2475,38 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
         <div className="rewrite-status">
           <span>{formatApprovalStatus(draft.approval_status)}</span>
           <strong>{draft.changes.length}</strong>
-          <small>处改写</small>
+          <small>{showAudit ? "处改写" : "处待确认"}</small>
         </div>
       </div>
 
-      <div className="rewrite-metrics">
-        <div>
-          <span>证据链接</span>
-          <strong>{evidenceCount}</strong>
+      {showAudit ? (
+        <div className="rewrite-metrics">
+          <div>
+            <span>证据链接</span>
+            <strong>{evidenceCount}</strong>
+          </div>
+          <div>
+            <span>风险</span>
+            <strong>{draft.risk_warnings.length}</strong>
+          </div>
+          <div>
+            <span>运行</span>
+            <strong>{result.run_id.slice(0, 12)}</strong>
+          </div>
         </div>
-        <div>
-          <span>风险</span>
-          <strong>{draft.risk_warnings.length}</strong>
-        </div>
-        <div>
-          <span>运行</span>
-          <strong>{result.run_id.slice(0, 12)}</strong>
-        </div>
-      </div>
+      ) : null}
 
       {tailored ? (
         <div className="tailored-resume-preview">
           <p className="eyebrow">个人概要</p>
-          <strong>{tailored.summary}</strong>
+          <p className="tailored-summary-text">{tailored.summary}</p>
+          <div className="tailored-skill-line">
+            {tailored.skills.slice(0, 10).map((skill) => (
+              <span className="keyword-match" key={`tailored-skill-${skill}`}>
+                {skill}
+              </span>
+            ))}
+          </div>
           {tailored.projects.length ? (
             <div className="tailored-projects">
               {tailored.projects.slice(0, 2).map((project) => (
@@ -2497,38 +2517,40 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
               ))}
             </div>
           ) : null}
-          <small>{tailored.evidence_notice}</small>
+          {mode === "audit" ? <small>{tailored.evidence_notice}</small> : null}
         </div>
       ) : null}
 
-      <div className="rewrite-change-list">
-        {topChanges.map((change) => (
-          <div className="rewrite-change" key={change.change_id}>
-            <div className="rewrite-change-title">
-              <strong>{formatRewriteSection(change.section)}</strong>
-              <span className={`risk-pill risk-${change.risk_level}`}>
-                {formatRiskLevel(change.risk_level)}
-              </span>
-            </div>
-            {change.original_text ? (
-              <p className="diff-line diff-remove">- {change.original_text}</p>
-            ) : null}
-            <p className="diff-line diff-add">+ {change.revised_text}</p>
-            <p>{change.rationale}</p>
-            {change.evidence.length ? (
-              <div className="evidence-strip">
-                {change.evidence.slice(0, 2).map((item) => (
-                  <span key={`${change.change_id}-${item.field_path}-${item.source_text}`}>
-                    {item.field_path}: {item.source_text}
-                  </span>
-                ))}
+      {showAudit ? (
+        <div className="rewrite-change-list">
+          {topChanges.map((change) => (
+            <div className="rewrite-change" key={change.change_id}>
+              <div className="rewrite-change-title">
+                <strong>{formatRewriteSection(change.section)}</strong>
+                <span className={`risk-pill risk-${change.risk_level}`}>
+                  {formatRiskLevel(change.risk_level)}
+                </span>
               </div>
-            ) : null}
-          </div>
-        ))}
-      </div>
+              {change.original_text ? (
+                <p className="diff-line diff-remove">- {change.original_text}</p>
+              ) : null}
+              <p className="diff-line diff-add">+ {change.revised_text}</p>
+              <p>{change.rationale}</p>
+              {change.evidence.length ? (
+                <div className="evidence-strip">
+                  {change.evidence.slice(0, 2).map((item) => (
+                    <span key={`${change.change_id}-${item.field_path}-${item.source_text}`}>
+                      {item.field_path}: {item.source_text}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
-      {draft.risk_warnings.length ? (
+      {showAudit && draft.risk_warnings.length ? (
         <div className="risk-list">
           <p className="eyebrow">风险提示</p>
           {draft.risk_warnings.slice(0, 4).map((warning) => (
