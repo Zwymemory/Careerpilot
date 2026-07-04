@@ -1,4 +1,5 @@
 import type {
+  InterviewPackResponse,
   JobCollectResponse,
   JobProfile,
   MatchProfile,
@@ -140,6 +141,21 @@ export function createRewriteDraft(payload: {
   match_profile: MatchProfile;
 }): Promise<ResumeRewriteResponse> {
   return request<ResumeRewriteResponse>("/api/rewrite-drafts", {
+    method: "POST",
+    body: JSON.stringify({
+      ...payload,
+      user_id: "local-user"
+    })
+  });
+}
+
+export function createInterviewPack(payload: {
+  resume_profile: ResumeProfile;
+  job_profile: JobProfile;
+  match_profile?: MatchProfile;
+  rewrite_draft?: ResumeRewriteResponse["draft"];
+}): Promise<InterviewPackResponse> {
+  return request<InterviewPackResponse>("/api/interview-packs", {
     method: "POST",
     body: JSON.stringify({
       ...payload,

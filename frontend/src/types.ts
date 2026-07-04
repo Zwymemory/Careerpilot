@@ -274,3 +274,79 @@ export interface ResumeRewriteResponse {
   run_id: string;
   draft: ResumeRewriteDraft;
 }
+
+export type InterviewQuestionCategory =
+  | "technical"
+  | "project"
+  | "behavioral"
+  | "gap"
+  | "system_design";
+
+export interface InterviewQuestion {
+  question_id: string;
+  category: InterviewQuestionCategory;
+  question: string;
+  why_asked: string;
+  suggested_angle: string;
+  priority: "P0" | "P1" | "P2";
+  evidence: EvidenceItem[];
+}
+
+export interface ProjectFollowUp {
+  project_name: string;
+  question: string;
+  probe_focus: string;
+  evidence: EvidenceItem[];
+  risk_flags: string[];
+}
+
+export interface StarAnswerDraft {
+  prompt: string;
+  situation: string;
+  task: string;
+  action: string;
+  result: string;
+  evidence: EvidenceItem[];
+  risk_notes: string[];
+}
+
+export interface KnowledgePoint {
+  topic: string;
+  why_matters: string;
+  current_signal: "covered" | "partial" | "gap";
+  review_prompt: string;
+  evidence: EvidenceItem[];
+}
+
+export interface MockInterviewDimension {
+  name: string;
+  score: number;
+  feedback: string;
+}
+
+export interface MockInterviewScore {
+  overall_score: number;
+  dimensions: MockInterviewDimension[];
+  strengths: string[];
+  risks: string[];
+  next_actions: string[];
+}
+
+export interface InterviewPack {
+  pack_id: string;
+  company: string | null;
+  title: string | null;
+  target_keywords: string[];
+  predicted_questions: InterviewQuestion[];
+  project_followups: ProjectFollowUp[];
+  star_answers: StarAnswerDraft[];
+  knowledge_points: KnowledgePoint[];
+  mock_score: MockInterviewScore;
+  evidence_warnings: string[];
+  markdown: string;
+}
+
+export interface InterviewPackResponse {
+  run_id: string;
+  pack: InterviewPack;
+}

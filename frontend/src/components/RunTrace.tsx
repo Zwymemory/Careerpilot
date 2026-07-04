@@ -122,7 +122,8 @@ function formatStepName(name: string): string {
     rewrite_approval: "改写审批",
     rewrite_export: "PDF 导出",
     job_collect: "岗位收集",
-    parse_collected_job: "收集结果解析"
+    parse_collected_job: "收集结果解析",
+    interview_generate: "面试准备包"
   };
   return labels[name] ?? titleizeToken(name);
 }
@@ -224,6 +225,17 @@ function localizeTraceText(text: string): string {
       (_, hard: string, nice: string, keywords: string) =>
         `收集到的 JD 已解析：${hard} 个硬性要求，${nice} 个加分项，${keywords} 个技术关键词。`,
     )
+    .replace(
+      /Generate interview prep from (\d+) project\(s\), (\d+) hard requirement\(s\), and (\d+) gap\(s\)\./g,
+      (_, projects: string, hard: string, gaps: string) =>
+        `基于 ${projects} 个项目、${hard} 个硬性要求和 ${gaps} 个缺口生成面试准备包。`,
+    )
+    .replace(
+      /Created interview pack with (\d+) predicted question\(s\), (\d+) project follow-up\(s\), (\d+) STAR draft\(s\), and score ([0-9.]+)\/100\./g,
+      (_, questions: string, followups: string, stars: string, score: string) =>
+        `已生成面试包：${questions} 个预测题、${followups} 个项目追问、${stars} 个 STAR 草稿，准备分 ${score}/100。`,
+    )
+    .replace("Interview pack generation failed.", "面试准备包生成失败。")
     .replace(/State changed to ([A-Z_]+)\./g, (_, state: string) => `状态已切换为${formatRunState(state)}。`)
     .replace(/Step ([a-zA-Z0-9_/-]+) started\./g, (_, name: string) => `步骤“${formatStepName(name)}”已开始。`)
     .replace(/Step ([a-zA-Z0-9_/-]+) completed\./g, (_, name: string) => `步骤“${formatStepName(name)}”已完成。`)

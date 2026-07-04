@@ -1121,7 +1121,7 @@ h3 {
 
 .journey-steps {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1992,6 +1992,131 @@ h3 {
 
 .rewrite-side .workflow-field {
   width: 100%;
+}
+
+.interview-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 14px;
+}
+
+.interview-summary {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 12% 6%, rgba(255, 255, 255, 0.5), transparent 42%),
+    radial-gradient(circle at 92% 90%, rgba(109, 173, 226, 0.14), transparent 50%),
+    rgba(255, 255, 255, 0.22);
+  box-shadow: 0 16px 38px rgba(59, 111, 139, 0.08);
+}
+
+.interview-summary-empty {
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+  min-height: 220px;
+  opacity: 0.76;
+}
+
+.interview-topline {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.interview-summary h3 {
+  margin-bottom: 10px;
+  color: #172b3a;
+  line-height: 1.32;
+}
+
+.interview-summary p,
+.interview-side p {
+  margin-bottom: 0;
+  color: rgba(31, 54, 69, 0.72);
+  line-height: 1.56;
+}
+
+.interview-score-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.interview-score-grid div,
+.interview-card {
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.1)),
+    rgba(255, 255, 255, 0.18);
+}
+
+.interview-score-grid div {
+  padding: 10px;
+}
+
+.interview-score-grid span,
+.interview-card span {
+  display: block;
+  color: rgba(48, 72, 86, 0.64);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.interview-score-grid strong {
+  display: block;
+  margin-top: 7px;
+  color: #172b3a;
+  font-size: 20px;
+}
+
+.interview-score-grid p {
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.interview-section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.interview-section-grid section {
+  min-width: 0;
+}
+
+.interview-card {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 11px 12px;
+}
+
+.interview-card strong {
+  color: #172b3a;
+  line-height: 1.42;
+}
+
+.interview-card p {
+  font-size: 13px;
+}
+
+.interview-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 16% 10%, rgba(255, 255, 255, 0.5), transparent 36%),
+    rgba(255, 255, 255, 0.22);
 }
 
 .trace-layout {

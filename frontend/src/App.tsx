@@ -4,6 +4,7 @@ import {
   approveLoopRun,
   approveRewriteDraft,
   collectJob,
+  createInterviewPack,
   createLoopRun,
   createMatch,
   createRewriteDraft,
@@ -17,6 +18,7 @@ import {
 } from "./api/client";
 import { RunTrace } from "./components/RunTrace";
 import type {
+  InterviewPackResponse,
   JobCollectResponse,
   MatchResponse,
   ParseJobResponse,
@@ -39,6 +41,7 @@ type WorkflowAction =
   | "job-collector"
   | "intake-analysis"
   | "match-agent"
+  | "interview-pack"
   | "rewrite-draft"
   | "rewrite-approval"
   | "rewrite-export"
@@ -75,6 +78,7 @@ export default function App() {
   const [jobCollectResult, setJobCollectResult] = useState<JobCollectResponse | null>(null);
   const [matchResult, setMatchResult] = useState<MatchResponse | null>(null);
   const [rewriteResult, setRewriteResult] = useState<ResumeRewriteResponse | null>(null);
+  const [interviewResult, setInterviewResult] = useState<InterviewPackResponse | null>(null);
   const [workflowAction, setWorkflowAction] = useState<WorkflowAction | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [approvalNotes, setApprovalNotes] = useState("");
@@ -620,6 +624,7 @@ export default function App() {
       setResumeResult(result);
       setMatchResult(null);
       setRewriteResult(null);
+      setInterviewResult(null);
       await showRun(result.run_id);
       await refreshRuns();
       markRequestComplete();
@@ -646,6 +651,7 @@ export default function App() {
       setJobCollectResult(null);
       setMatchResult(null);
       setRewriteResult(null);
+      setInterviewResult(null);
       await showRun(result.run_id);
       await refreshRuns();
       markRequestComplete();
@@ -693,6 +699,7 @@ export default function App() {
       });
       setMatchResult(null);
       setRewriteResult(null);
+      setInterviewResult(null);
       await showRun(result.run_id);
       await refreshRuns();
       markRequestComplete();
@@ -744,6 +751,7 @@ export default function App() {
       }
       setMatchResult(null);
       setRewriteResult(null);
+      setInterviewResult(null);
       await showRun(parsedJob.run_id);
       await refreshRuns();
       markRequestComplete();
@@ -798,6 +806,7 @@ export default function App() {
       });
       setMatchResult(result);
       setRewriteResult(null);
+      setInterviewResult(null);
       await showRun(result.run_id);
       await refreshRuns();
       markRequestComplete();
@@ -824,6 +833,7 @@ export default function App() {
         match_profile: matchResult.match
       });
       setRewriteResult(result);
+      setInterviewResult(null);
       await showRun(result.run_id);
       await refreshRuns();
       markRequestComplete();
@@ -882,6 +892,33 @@ export default function App() {
       URL.revokeObjectURL(url);
     } catch (err) {
       setWorkflowError(err instanceof Error ? err.message : "PDF 导出失败。");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleCreateInterviewPack() {
+    if (!resumeResult || !jobResult || workflowAction) {
+      setWorkflowError("InterviewCoachAgent 需要先完成简历解析和 JD 解析。");
+      return;
+    }
+
+    setWorkflowAction("interview-pack");
+    setWorkflowError(null);
+    clearCompletionPulse();
+    try {
+      const result = await createInterviewPack({
+        resume_profile: resumeResult.profile,
+        job_profile: jobResult.profile,
+        ...(matchResult ? { match_profile: matchResult.match } : {}),
+        ...(rewriteResult ? { rewrite_draft: rewriteResult.draft } : {})
+      });
+      setInterviewResult(result);
+      await showRun(result.run_id);
+      await refreshRuns();
+      markRequestComplete();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "InterviewCoachAgent 生成面试包失败。");
     } finally {
       setWorkflowAction(null);
     }
@@ -1004,6 +1041,7 @@ export default function App() {
   const canResumeActiveRun = activeRun?.run.state === "FAILED";
   const canRunMatch = Boolean(resumeResult && jobResult);
   const canRunRewrite = Boolean(resumeResult && jobResult && matchResult);
+  const canRunInterview = Boolean(resumeResult && jobResult);
   const canApproveRewrite =
     rewriteResult?.draft.approval_status === "WAITING_APPROVAL" &&
     activeRun?.run.run_id === rewriteResult.run_id &&
@@ -1224,6 +1262,12 @@ export default function App() {
               text="确认没有虚构内容后，导出中文简历改写稿。"
               active={Boolean(rewriteResult)}
             />
+            <ProductStep
+              index="05"
+              title="准备面试"
+              text="生成面试题预测、项目追问、STAR 讲法和复习清单。"
+              active={Boolean(interviewResult)}
+            />
           </div>
         </section>
 
@@ -1376,12 +1420,42 @@ export default function App() {
               {!canRunRewrite ? <span className="match-hint">请先完成匹配报告。</span> : null}
             </div>
           </section>
+
+          <section className="product-panel product-panel-wide scroll-fade glass-surface liftable">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">第四步</p>
+                <h2>面试准备包</h2>
+              </div>
+              <span className="state-badge">证据锁定</span>
+            </div>
+            <div className="interview-workspace">
+              <InterviewSummary result={interviewResult} />
+              <div className="interview-side">
+                <p>
+                  InterviewCoachAgent 会把简历证据、JD 要求、匹配缺口和改写草稿转成面试准备材料。
+                  它不会替你编故事，只会提示哪些内容已有证据，哪些需要先补真实练习。
+                </p>
+                <button
+                  className="primary-action liftable"
+                  type="button"
+                  onClick={handleCreateInterviewPack}
+                  disabled={workflowAction !== null || !canRunInterview}
+                >
+                  {workflowAction === "interview-pack" ? "生成中" : "生成面试包"}
+                </button>
+                {!canRunInterview ? (
+                  <span className="match-hint">请先解析经历和 JD。</span>
+                ) : null}
+              </div>
+            </div>
+          </section>
         </section>
 
         <details className="developer-view glass-surface revealable">
           <summary>
             <span>开发者视图</span>
-            <strong>查看 Week2-6 Agent 运行细节、审批和 checkpoint</strong>
+            <strong>查看 Week2-7 Agent 运行细节、审批和 checkpoint</strong>
           </summary>
           <section className="workflow-board developer-workflow">
             <section className="workflow-panel workflow-panel-wide scroll-fade glass-surface liftable">
@@ -1577,6 +1651,36 @@ export default function App() {
                       {workflowAction === "rewrite-export" ? "导出中" : "导出 PDF"}
                     </button>
                   </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="workflow-panel workflow-panel-wide scroll-fade glass-surface liftable">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Week7 InterviewCoachAgent</p>
+                  <h2>面试题预测 · STAR 讲法 · 模拟评分</h2>
+                </div>
+                <span className="state-badge">W7</span>
+              </div>
+              <div className="interview-workspace">
+                <InterviewSummary result={interviewResult} />
+                <div className="interview-side">
+                  <p>
+                    W7 继承前面几周的证据链：W2 结构化输入、W4 缺口、W5 改写草稿。
+                    它把这些内容转成可练习的面试题、项目追问和 STAR 讲法，并保留 checkpoint。
+                  </p>
+                  <button
+                    className="primary-action liftable"
+                    type="button"
+                    onClick={handleCreateInterviewPack}
+                    disabled={workflowAction !== null || !canRunInterview}
+                  >
+                    {workflowAction === "interview-pack" ? "生成中" : "运行面试教练"}
+                  </button>
+                  {!canRunInterview ? (
+                    <span className="match-hint">请先完成经历和 JD 解析。</span>
+                  ) : null}
                 </div>
               </div>
             </section>
@@ -1956,6 +2060,117 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
   );
 }
 
+function InterviewSummary({ result }: { result: InterviewPackResponse | null }) {
+  if (!result) {
+    return (
+      <article className="interview-summary interview-summary-empty">
+        <div className="score-orb">
+          <strong>--</strong>
+          <span>准备分</span>
+        </div>
+        <div>
+          <p className="eyebrow">等待 InterviewCoachAgent</p>
+          <h3>先解析材料，再生成面试准备包。</h3>
+          <p>面试题预测、项目追问、STAR 讲法和复习清单会显示在这里。</p>
+        </div>
+      </article>
+    );
+  }
+
+  const { pack } = result;
+  const topQuestions = pack.predicted_questions.slice(0, 4);
+  const topFollowups = pack.project_followups.slice(0, 3);
+  const topStars = pack.star_answers.slice(0, 2);
+  const gapPoints = pack.knowledge_points.filter((point) => point.current_signal === "gap").slice(0, 4);
+
+  return (
+    <article className="interview-summary">
+      <div className="interview-topline">
+        <div className="score-orb score-orb-on">
+          <strong>{Math.round(pack.mock_score.overall_score)}</strong>
+          <span>准备分</span>
+        </div>
+        <div>
+          <p className="eyebrow">面试准备包</p>
+          <h3>{pack.company ?? "目标公司"} · {pack.title ?? "目标岗位"}</h3>
+          <div className="keyword-cloud">
+            {pack.target_keywords.slice(0, 9).map((keyword) => (
+              <span className="keyword-match" key={`interview-keyword-${keyword}`}>
+                {keyword}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="interview-score-grid">
+        {pack.mock_score.dimensions.slice(0, 4).map((dimension) => (
+          <div key={dimension.name}>
+            <span>{dimension.name}</span>
+            <strong>{Math.round(dimension.score)}</strong>
+            <p>{dimension.feedback}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="interview-section-grid">
+        <section>
+          <p className="eyebrow">预测问题</p>
+          {topQuestions.map((question) => (
+            <div className="interview-card" key={question.question_id}>
+              <span>{question.priority} · {formatInterviewCategory(question.category)}</span>
+              <strong>{question.question}</strong>
+              <p>{question.suggested_angle}</p>
+            </div>
+          ))}
+        </section>
+        <section>
+          <p className="eyebrow">项目追问</p>
+          {topFollowups.map((followup) => (
+            <div className="interview-card" key={`${followup.project_name}-${followup.question}`}>
+              <span>{followup.project_name}</span>
+              <strong>{followup.question}</strong>
+              <p>{followup.probe_focus}</p>
+            </div>
+          ))}
+        </section>
+      </div>
+
+      <div className="interview-section-grid">
+        <section>
+          <p className="eyebrow">STAR 讲法</p>
+          {topStars.map((answer) => (
+            <div className="interview-card" key={answer.prompt}>
+              <span>真实经历</span>
+              <strong>{answer.prompt}</strong>
+              <p>{answer.action}</p>
+            </div>
+          ))}
+        </section>
+        <section>
+          <p className="eyebrow">需要补强</p>
+          {(gapPoints.length ? gapPoints : pack.knowledge_points.slice(0, 3)).map((point) => (
+            <div className="interview-card" key={point.topic}>
+              <span>{formatKnowledgeSignal(point.current_signal)}</span>
+              <strong>{point.topic}</strong>
+              <p>{point.review_prompt}</p>
+            </div>
+          ))}
+        </section>
+      </div>
+
+      {pack.evidence_warnings.length ? (
+        <div className="risk-list">
+          <p className="eyebrow">真实性提醒</p>
+          {pack.evidence_warnings.slice(0, 4).map((warning) => (
+            <span key={warning}>{warning}</span>
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 function formatState(state: string): string {
   const labels: Record<string, string> = {
     IDLE: "空闲",
@@ -2023,6 +2238,26 @@ function formatRiskLevel(level: string): string {
     high: "高风险"
   };
   return labels[level.toLowerCase()] ?? level;
+}
+
+function formatInterviewCategory(category: string): string {
+  const labels: Record<string, string> = {
+    technical: "技术题",
+    project: "项目题",
+    behavioral: "行为题",
+    gap: "缺口追问",
+    system_design: "方案设计"
+  };
+  return labels[category] ?? titleizeToken(category);
+}
+
+function formatKnowledgeSignal(signal: string): string {
+  const labels: Record<string, string> = {
+    covered: "已有证据",
+    partial: "部分相关",
+    gap: "需要补强"
+  };
+  return labels[signal] ?? titleizeToken(signal);
 }
 
 function formatRewriteSection(section: string): string {
