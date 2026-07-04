@@ -82,8 +82,10 @@ def test_resume_rewrite_agent_creates_evidence_locked_draft() -> None:
     assert any(change.evidence for change in draft.changes if change.section != "evidence_needed")
     assert any(change.section == "evidence_needed" for change in draft.changes)
     assert any("SQL" in warning for warning in draft.risk_warnings)
-    assert "CareerPilot 中文简历改写稿" in draft.markdown
-    assert "改写建议" in draft.markdown
+    assert draft.tailored_resume is not None
+    assert "定制版中文简历草稿" in draft.markdown
+    assert "改写建议" not in draft.markdown
+    assert "证据说明" not in draft.markdown
 
 
 def test_rewrite_endpoint_requires_approval_before_export(client: TestClient) -> None:

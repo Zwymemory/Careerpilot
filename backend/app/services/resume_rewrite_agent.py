@@ -237,7 +237,10 @@ def _rewrite_artifact_system_prompt() -> str:
         "Function Calling, PostgreSQL in English. Do not invent employers, education, dates, "
         "metrics, awards, production scale, or skills that are not supported by the evidence. "
         "If a JD signal lacks evidence, put it in risk_notes instead of the resume body. "
-        "The markdown should be a clean candidate-facing resume draft, not an audit log."
+        "The markdown must look like a real resume: headline, summary, skills, projects, "
+        "experience, and education only. Do not include audit logs, evidence paths, risk notes, "
+        "quality-gate wording, or explanations in the markdown. Use concise human language, "
+        "not system language."
     )
 
 
@@ -364,22 +367,12 @@ def _render_tailored_resume_markdown(artifact: TailoredResumeArtifact) -> str:
     if artifact.education:
         lines.extend(["", "## 教育经历"])
         lines.extend(f"- {education}" for education in artifact.education)
-    lines.extend(["", "## 证据说明", artifact.evidence_notice])
-    if artifact.risk_notes:
-        lines.extend(["", "## 不建议直接写入的内容"])
-        lines.extend(f"- {note}" for note in artifact.risk_notes)
     return "\n".join(lines)
 
 
 def render_rewrite_markdown(draft: ResumeRewriteDraft) -> str:
     if draft.tailored_resume:
-        return "\n\n".join(
-            [
-                draft.tailored_resume.markdown,
-                "---",
-                _render_rewrite_audit_markdown(draft),
-            ]
-        )
+        return draft.tailored_resume.markdown
 
     return _render_rewrite_audit_markdown(draft)
 
@@ -630,13 +623,6 @@ def _append_tailored_resume_story(artifact: TailoredResumeArtifact, story, style
         for education in artifact.education:
             story.append(_rl_paragraph(f"· {education}", styles["normal"]))
 
-    story.append(_rl_section("证据说明", styles))
-    story.append(_rl_paragraph(artifact.evidence_notice, styles["small"]))
-    if artifact.risk_notes:
-        story.append(_rl_section("不建议直接写入的内容", styles))
-        for note in artifact.risk_notes[:8]:
-            story.append(_rl_paragraph(f"· {note}", styles["small"]))
-
 
 def _register_reportlab_font(pdfmetrics, TTFont, UnicodeCIDFont) -> str:
     font_name = "CareerPilotCN"
@@ -844,11 +830,6 @@ def _pdf_resume_blocks(draft: ResumeRewriteDraft) -> list[tuple[str, str]]:
             )
         if artifact.education:
             blocks.append(("教育经历", "\n".join(f"· {item}" for item in artifact.education)))
-        blocks.append(("证据说明", artifact.evidence_notice))
-        if artifact.risk_notes:
-            blocks.append(
-                ("不建议直接写入的内容", "\n".join(f"· {note}" for note in artifact.risk_notes))
-            )
         return blocks
 
     blocks = [
