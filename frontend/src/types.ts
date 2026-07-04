@@ -258,6 +258,27 @@ export interface RewriteChange {
   risk_level: "low" | "medium" | "high";
 }
 
+export interface TailoredResumeProject {
+  name: string;
+  bullets: string[];
+  evidence_paths: string[];
+}
+
+export interface TailoredResumeArtifact {
+  language: "zh-CN";
+  company: string | null;
+  title: string | null;
+  headline: string;
+  summary: string;
+  skills: string[];
+  projects: TailoredResumeProject[];
+  experiences: string[];
+  education: string[];
+  evidence_notice: string;
+  risk_notes: string[];
+  markdown: string;
+}
+
 export interface ResumeRewriteDraft {
   draft_id: string;
   approval_status: "WAITING_APPROVAL" | "APPROVED" | "REJECTED";
@@ -267,6 +288,7 @@ export interface ResumeRewriteDraft {
   target_keywords: string[];
   changes: RewriteChange[];
   risk_warnings: string[];
+  tailored_resume: TailoredResumeArtifact | null;
   markdown: string;
 }
 
@@ -414,4 +436,66 @@ export interface ApplicationRecord {
 export interface ApplicationResponse {
   run_id: string;
   record: ApplicationRecord;
+}
+
+export type EvalArtifactType =
+  | "parser"
+  | "matching"
+  | "rewrite"
+  | "interview"
+  | "application"
+  | "judge";
+
+export type EvalRuleStatus = "passed" | "warning" | "failed";
+export type EvalRuleSeverity = "info" | "warning" | "critical";
+export type EvalGateDecision = "PASS" | "WARN" | "BLOCK";
+export type EvalJudgeMode = "rule_based" | "llm_as_judge_dry_run";
+
+export interface EvalRuleResult {
+  rule_id: string;
+  category: EvalArtifactType;
+  name: string;
+  status: EvalRuleStatus;
+  severity: EvalRuleSeverity;
+  score: number;
+  message: string;
+  evidence: string[];
+}
+
+export interface QualityGateResult {
+  decision: EvalGateDecision;
+  passed: boolean;
+  score: number;
+  blocking_reasons: string[];
+  warnings: string[];
+  release_notes: string[];
+}
+
+export interface EvalReport {
+  report_id: string;
+  user_id: string;
+  case_name: string;
+  judge_mode: EvalJudgeMode;
+  evaluated_artifacts: EvalArtifactType[];
+  overall_score: number;
+  gate: QualityGateResult;
+  rule_results: EvalRuleResult[];
+  summary: string;
+  html_report: string;
+  created_at: string;
+}
+
+export interface EvalReportSummary {
+  report_id: string;
+  case_name: string;
+  judge_mode: EvalJudgeMode;
+  overall_score: number;
+  decision: EvalGateDecision;
+  evaluated_artifacts: EvalArtifactType[];
+  created_at: string;
+}
+
+export interface EvalRunResponse {
+  run_id: string;
+  report: EvalReport;
 }

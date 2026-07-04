@@ -2,6 +2,10 @@ import type {
   ApplicationResponse,
   ApplicationStatus,
   ApplicationRecord,
+  EvalJudgeMode,
+  EvalReport,
+  EvalReportSummary,
+  EvalRunResponse,
   InterviewPackResponse,
   JobCollectResponse,
   JobProfile,
@@ -223,6 +227,36 @@ export function updateApplicationStatus(
       user_id: "local-user"
     })
   });
+}
+
+export function listEvalReports(userId = "local-user"): Promise<EvalReportSummary[]> {
+  return request<EvalReportSummary[]>(`/api/evals?user_id=${encodeURIComponent(userId)}`);
+}
+
+export function createEvalReport(payload: {
+  case_name: string;
+  judge_mode?: EvalJudgeMode;
+  min_score?: number;
+  expected_keywords?: string[];
+  required_sections?: string[];
+  resume_profile?: ResumeProfile;
+  job_profile?: JobProfile;
+  match_profile?: MatchProfile;
+  rewrite_draft?: ResumeRewriteResponse["draft"];
+  interview_pack?: InterviewPackResponse["pack"];
+  application_record?: ApplicationRecord;
+}): Promise<EvalRunResponse> {
+  return request<EvalRunResponse>("/api/evals", {
+    method: "POST",
+    body: JSON.stringify({
+      ...payload,
+      user_id: "local-user"
+    })
+  });
+}
+
+export function evalReportHtmlUrl(report: EvalReport): string {
+  return `${API_BASE_URL}/api/evals/${report.report_id}/report.html`;
 }
 
 export function approveRewriteDraft(runId: string, notes?: string): Promise<RunDetail> {

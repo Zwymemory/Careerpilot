@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
     applications,
+    evals,
     health,
     interview_packs,
     job_collector,
@@ -24,7 +25,8 @@ def create_app() -> FastAPI:
             "CareerPilot API: run trace, cost tracking, LLM client boundary, "
             "structured Resume/JD parsing, Week3 LoopEngine, Week4 MatchAgent, "
             "Week5 ResumeRewriteAgent, Week6 JobCollector browser boundary, "
-            "Week7 InterviewCoachAgent, and Week8 Application CRM memory."
+            "Week7 InterviewCoachAgent, Week8 Application CRM memory, "
+            "and Week9 Eval Harness QualityGate."
         ),
     )
 
@@ -37,6 +39,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(applications.router, prefix="/api")
+    app.include_router(evals.router, prefix="/api")
     app.include_router(health.router, prefix="/api")
     app.include_router(interview_packs.router, prefix="/api")
     app.include_router(job_collector.router, prefix="/api")

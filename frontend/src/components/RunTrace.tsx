@@ -126,7 +126,8 @@ function formatStepName(name: string): string {
     interview_generate: "面试准备包",
     application_record: "投递记录",
     interview_feedback: "面试反馈",
-    application_status: "投递状态"
+    application_status: "投递状态",
+    eval_harness: "质量评测"
   };
   return labels[name] ?? titleizeToken(name);
 }
@@ -267,6 +268,20 @@ function localizeTraceText(text: string): string {
     .replace(
       /Application status updated to ([A-Z_]+)\./g,
       (_, state: string) => `投递状态已更新为 ${formatApplicationStatus(state)}。`,
+    )
+    .replace(
+      /Run (rule_based|llm_as_judge_dry_run) evaluation with min score ([0-9.]+)\./g,
+      (_, mode: string, score: string) =>
+        `运行${mode === "rule_based" ? "规则评测" : "LLM-as-judge dry-run 评测"}，最低通过分 ${score}。`,
+    )
+    .replace(
+      /Evaluate CareerPilot artifacts for (.+)$/g,
+      (_, caseName: string) => `评测 CareerPilot 产物：${caseName}`,
+    )
+    .replace(
+      /Eval report (eval_[a-z0-9]+) completed with score ([0-9.]+) and gate ([A-Z]+)\./g,
+      (_, reportId: string, score: string, gate: string) =>
+        `评测报告 ${reportId} 已完成，分数 ${score}，QualityGate=${gate}。`,
     )
     .replace(/State changed to ([A-Z_]+)\./g, (_, state: string) => `状态已切换为${formatRunState(state)}。`)
     .replace(/Step ([a-zA-Z0-9_/-]+) started\./g, (_, name: string) => `步骤“${formatStepName(name)}”已开始。`)

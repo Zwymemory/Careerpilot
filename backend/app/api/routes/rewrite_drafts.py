@@ -1,12 +1,13 @@
 from fastapi import APIRouter, HTTPException, Response, status
 
+from app.core.config import get_settings
 from app.schemas.rewrite import (
     ResumeRewriteDraft,
     ResumeRewriteRequest,
     ResumeRewriteResponse,
     RewriteApprovalRequest,
 )
-from app.schemas.run import EventType, RunDetail, RunState
+from app.schemas.run import CostUsage, EventType, RunDetail, RunState
 from app.services.resume_rewrite_agent import (
     ResumeRewriteAgent,
     render_rewrite_markdown,
@@ -39,10 +40,11 @@ async def create_rewrite_draft(payload: ResumeRewriteRequest) -> ResumeRewriteRe
     )
 
     try:
-        draft = ResumeRewriteAgent().create_draft(
+        draft, llm_response, rewrite_issues = await ResumeRewriteAgent().create_draft_with_llm(
             payload.resume_profile,
             payload.job_profile,
             payload.match_profile,
+            get_settings(),
         )
     except Exception as exc:  # noqa: BLE001 - route converts agent failures into trace + HTTP error.
         run_store.fail_step(run.run_id, step.step_id, str(exc))
@@ -50,6 +52,37 @@ async def create_rewrite_draft(payload: ResumeRewriteRequest) -> ResumeRewriteRe
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Resume rewrite failed.",
         ) from exc
+
+    if llm_response:
+        run_store.record_cost(
+            run.run_id,
+            CostUsage(
+                provider=llm_response.provider,
+                model=llm_response.model,
+                prompt_tokens=llm_response.usage.prompt_tokens,
+                completion_tokens=llm_response.usage.completion_tokens,
+                total_tokens=llm_response.usage.total_tokens,
+                latency_ms=llm_response.latency_ms,
+                estimated_cost_cny=llm_response.estimated_cost_cny,
+            ),
+        )
+        run_store.add_event(
+            run.run_id,
+            EventType.LLM_CALL_COMPLETED,
+            "LLM generated a candidate-facing Chinese resume artifact.",
+            {
+                "model": llm_response.model,
+                "dry_run": llm_response.dry_run,
+                "issues": rewrite_issues,
+            },
+        )
+    elif rewrite_issues:
+        run_store.add_event(
+            run.run_id,
+            EventType.STEP_COMPLETED,
+            "Resume artifact used deterministic evidence-locked template.",
+            {"issues": rewrite_issues},
+        )
 
     run_store.complete_step(
         run.run_id,

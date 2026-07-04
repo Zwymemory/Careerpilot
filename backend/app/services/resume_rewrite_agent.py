@@ -1,11 +1,23 @@
+import json
 import re
 from io import BytesIO
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+from pydantic import ValidationError
+
+from app.core.config import Settings
+from app.schemas.llm import ChatMessage, LLMRequest, LLMResponse
 from app.schemas.matching import MatchProfile
 from app.schemas.parser import EvidenceItem, JobProfile, ResumeProfile
-from app.schemas.rewrite import ResumeRewriteDraft, RewriteChange
+from app.schemas.rewrite import (
+    ResumeRewriteDraft,
+    RewriteChange,
+    TailoredResumeArtifact,
+    TailoredResumeProject,
+)
+from app.services.json_repair import JSONRepairError, repair_json_object
+from app.services.llm_client import LLMClient, LLMClientError
 from app.services.run_store import new_id
 
 
@@ -32,6 +44,14 @@ class ResumeRewriteAgent:
         changes = [change for change in changes if change is not None][:10]
         warnings = _risk_warnings(match)
         headline = _headline(job, target_keywords)
+        tailored_resume = _build_tailored_resume(
+            resume,
+            job,
+            headline,
+            target_keywords,
+            changes,
+            warnings,
+        )
         draft = ResumeRewriteDraft(
             draft_id=new_id("draft"),
             company=job.company,
@@ -40,10 +60,66 @@ class ResumeRewriteAgent:
             target_keywords=target_keywords,
             changes=changes,
             risk_warnings=warnings,
+            tailored_resume=tailored_resume,
             markdown="",
         )
         draft.markdown = render_rewrite_markdown(draft)
         return draft
+
+    async def create_draft_with_llm(
+        self,
+        resume: ResumeProfile,
+        job: JobProfile,
+        match: MatchProfile,
+        settings: Settings,
+    ) -> tuple[ResumeRewriteDraft, LLMResponse | None, list[str]]:
+        draft = self.create_draft(resume, job, match)
+        if settings.llm_dry_run or not settings.llm_api_key:
+            return draft, None, ["llm_resume_artifact_skipped_dry_run"]
+
+        response: LLMResponse | None = None
+        try:
+            response = await LLMClient(settings).chat(
+                LLMRequest(
+                    messages=[
+                        ChatMessage(role="system", content=_rewrite_artifact_system_prompt()),
+                        ChatMessage(
+                            role="user",
+                            content=json.dumps(
+                                {
+                                    "resume_profile": resume.model_dump(mode="json"),
+                                    "job_profile": job.model_dump(mode="json"),
+                                    "match_profile": match.model_dump(mode="json"),
+                                    "rewrite_changes": [
+                                        change.model_dump(mode="json") for change in draft.changes
+                                    ],
+                                    "risk_warnings": draft.risk_warnings,
+                                },
+                                ensure_ascii=False,
+                            ),
+                        ),
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.2,
+                    max_tokens=2200,
+                )
+            )
+            repaired = repair_json_object(response.content)
+            artifact = TailoredResumeArtifact.model_validate(repaired.data)
+            artifact = _sanitize_tailored_resume(artifact, draft, resume, job)
+            draft.tailored_resume = artifact
+            draft.markdown = render_rewrite_markdown(draft)
+            issues = [f"llm_resume_artifact:{issue}" for issue in repaired.issues]
+            return draft, response, issues
+        except (JSONRepairError, LLMClientError, ValidationError, KeyError, ValueError) as exc:
+            draft.risk_warnings = _unique(
+                [
+                    *draft.risk_warnings,
+                    f"LLM 简历成品生成失败，已回退到证据锁定模板：{exc}",
+                ]
+            )[:8]
+            draft.markdown = render_rewrite_markdown(draft)
+            return draft, response, ["llm_resume_artifact_fallback"]
 
     def _summary_change(
         self,
@@ -150,7 +226,165 @@ class ResumeRewriteAgent:
         return changes[:3]
 
 
+def _rewrite_artifact_system_prompt() -> str:
+    return (
+        "You are CareerPilot ResumeRewriteAgent. Return only one JSON object matching this schema: "
+        "{language:'zh-CN', company:string|null, title:string|null, headline:string, "
+        "summary:string, skills:string[], projects:[{name:string, bullets:string[], "
+        "evidence_paths:string[]}], experiences:string[], education:string[], "
+        "evidence_notice:string, risk_notes:string[], markdown:string}. "
+        "Write mostly in Chinese. Keep technical keywords such as Python, FastAPI, RAG, "
+        "Function Calling, PostgreSQL in English. Do not invent employers, education, dates, "
+        "metrics, awards, production scale, or skills that are not supported by the evidence. "
+        "If a JD signal lacks evidence, put it in risk_notes instead of the resume body. "
+        "The markdown should be a clean candidate-facing resume draft, not an audit log."
+    )
+
+
+def _build_tailored_resume(
+    resume: ResumeProfile,
+    job: JobProfile,
+    headline: str,
+    target_keywords: list[str],
+    changes: list[RewriteChange],
+    warnings: list[str],
+) -> TailoredResumeArtifact:
+    summary_change = next((change for change in changes if change.section == "summary"), None)
+    skills_change = next((change for change in changes if change.section == "skills"), None)
+    summary = (
+        summary_change.revised_text
+        if summary_change
+        else _fallback_summary(job, target_keywords)
+    )
+    skill_text = skills_change.revised_text if skills_change else ", ".join(resume.skills)
+    skills = _split_skills(skill_text)
+    projects = [
+        TailoredResumeProject(
+            name=project.name,
+            bullets=_project_bullets(project.description, project.skills, target_keywords),
+            evidence_paths=[item.field_path for item in project.evidence[:4]],
+        )
+        for project in resume.projects[:3]
+    ]
+    experiences = [
+        _clean_text(
+            "；".join(
+                item
+                for item in [
+                    experience.company,
+                    experience.title,
+                    experience.description,
+                ]
+                if item
+            )
+        )
+        for experience in resume.experiences[:3]
+    ]
+    education = [
+        _clean_text(
+            "；".join(
+                item
+                for item in [
+                    education.school,
+                    education.degree,
+                    education.major,
+                    education.start_date,
+                    education.end_date,
+                ]
+                if item
+            )
+        )
+        for education in resume.education[:2]
+    ]
+    artifact = TailoredResumeArtifact(
+        company=job.company,
+        title=job.title,
+        headline=headline,
+        summary=summary,
+        skills=skills,
+        projects=projects,
+        experiences=[item for item in experiences if item],
+        education=[item for item in education if item],
+        evidence_notice="本简历草稿仅使用已解析简历证据生成；无证据的 JD 信号保留在风险提示中。",
+        risk_notes=warnings[:6],
+        markdown="",
+    )
+    artifact.markdown = _render_tailored_resume_markdown(artifact)
+    return artifact
+
+
+def _sanitize_tailored_resume(
+    artifact: TailoredResumeArtifact,
+    draft: ResumeRewriteDraft,
+    resume: ResumeProfile,
+    job: JobProfile,
+) -> TailoredResumeArtifact:
+    allowed_skills = _unique([*resume.skills, *draft.target_keywords])
+    allowed_skill_keys = {item.lower() for item in allowed_skills}
+    artifact.company = artifact.company or job.company
+    artifact.title = artifact.title or job.title
+    artifact.headline = artifact.headline or draft.headline
+    artifact.skills = [
+        skill for skill in _unique(artifact.skills) if skill.lower() in allowed_skill_keys
+    ][:14]
+    if not artifact.skills:
+        artifact.skills = allowed_skills[:10]
+    artifact.risk_notes = _unique([*artifact.risk_notes, *draft.risk_warnings])[:8]
+    artifact.evidence_notice = (
+        artifact.evidence_notice
+        or "本简历草稿仅使用已解析简历证据生成；无证据的 JD 信号保留在风险提示中。"
+    )
+    artifact.markdown = _render_tailored_resume_markdown(artifact)
+    return artifact
+
+
+def _render_tailored_resume_markdown(artifact: TailoredResumeArtifact) -> str:
+    lines = [
+        "# 定制版中文简历草稿",
+        "",
+        f"目标岗位：{artifact.company or '未知公司'} / {artifact.title or '未知岗位'}",
+        "",
+        "## 标题",
+        artifact.headline,
+        "",
+        "## 个人概要",
+        artifact.summary,
+        "",
+        "## 核心技能",
+        "、".join(artifact.skills) if artifact.skills else "暂无可写入技能。",
+    ]
+    if artifact.projects:
+        lines.extend(["", "## 项目经历"])
+        for project in artifact.projects:
+            lines.append(f"### {project.name}")
+            lines.extend(f"- {bullet}" for bullet in project.bullets)
+    if artifact.experiences:
+        lines.extend(["", "## 实习/工作经历"])
+        lines.extend(f"- {experience}" for experience in artifact.experiences)
+    if artifact.education:
+        lines.extend(["", "## 教育经历"])
+        lines.extend(f"- {education}" for education in artifact.education)
+    lines.extend(["", "## 证据说明", artifact.evidence_notice])
+    if artifact.risk_notes:
+        lines.extend(["", "## 不建议直接写入的内容"])
+        lines.extend(f"- {note}" for note in artifact.risk_notes)
+    return "\n".join(lines)
+
+
 def render_rewrite_markdown(draft: ResumeRewriteDraft) -> str:
+    if draft.tailored_resume:
+        return "\n\n".join(
+            [
+                draft.tailored_resume.markdown,
+                "---",
+                _render_rewrite_audit_markdown(draft),
+            ]
+        )
+
+    return _render_rewrite_audit_markdown(draft)
+
+
+def _render_rewrite_audit_markdown(draft: ResumeRewriteDraft) -> str:
     lines = [
         "# CareerPilot 中文简历改写稿",
         "",
@@ -320,9 +554,13 @@ def _render_rewrite_pdf_reportlab(draft: ResumeRewriteDraft) -> bytes:
     story.append(Spacer(1, 10))
     story.append(_rl_paragraph(_target_line(draft), styles["subtitle"]))
     story.append(_rl_paragraph(draft.headline, styles["subtitle"]))
+    if draft.tailored_resume:
+        _append_tailored_resume_story(draft.tailored_resume, story, styles)
+        document.build(story)
+        return buffer.getvalue()
+
     story.append(_rl_section("目标关键词", styles))
     story.append(_rl_paragraph(_keyword_line(draft), styles["normal"]))
-
     summary = _first_change(draft, "summary")
     if summary:
         story.append(_rl_section("个人概要", styles))
@@ -364,6 +602,40 @@ def _render_rewrite_pdf_reportlab(draft: ResumeRewriteDraft) -> bytes:
 
     document.build(story)
     return buffer.getvalue()
+
+
+def _append_tailored_resume_story(artifact: TailoredResumeArtifact, story, styles) -> None:
+    from reportlab.platypus import Spacer
+
+    story.append(_rl_section("个人概要", styles))
+    story.append(_rl_paragraph(artifact.summary, styles["normal"]))
+    story.append(_rl_section("核心技能", styles))
+    story.append(_rl_paragraph("、".join(artifact.skills) or "暂无可写入技能。", styles["normal"]))
+
+    if artifact.projects:
+        story.append(_rl_section("项目经历", styles))
+        for project in artifact.projects:
+            story.append(_rl_paragraph(project.name, styles["subtitle"]))
+            for bullet in project.bullets:
+                story.append(_rl_paragraph(f"· {bullet}", styles["normal"]))
+            story.append(Spacer(1, 5))
+
+    if artifact.experiences:
+        story.append(_rl_section("实习/工作经历", styles))
+        for experience in artifact.experiences:
+            story.append(_rl_paragraph(f"· {experience}", styles["normal"]))
+
+    if artifact.education:
+        story.append(_rl_section("教育经历", styles))
+        for education in artifact.education:
+            story.append(_rl_paragraph(f"· {education}", styles["normal"]))
+
+    story.append(_rl_section("证据说明", styles))
+    story.append(_rl_paragraph(artifact.evidence_notice, styles["small"]))
+    if artifact.risk_notes:
+        story.append(_rl_section("不建议直接写入的内容", styles))
+        for note in artifact.risk_notes[:8]:
+            story.append(_rl_paragraph(f"· {note}", styles["small"]))
 
 
 def _register_reportlab_font(pdfmetrics, TTFont, UnicodeCIDFont) -> str:
@@ -548,6 +820,37 @@ def _first_change(draft: ResumeRewriteDraft, section: str) -> RewriteChange | No
 
 
 def _pdf_resume_blocks(draft: ResumeRewriteDraft) -> list[tuple[str, str]]:
+    if draft.tailored_resume:
+        artifact = draft.tailored_resume
+        blocks = [
+            ("投递标题", artifact.headline),
+            ("个人概要", artifact.summary),
+            ("核心技能", "、".join(artifact.skills) if artifact.skills else "暂无可写入技能。"),
+        ]
+        if artifact.projects:
+            blocks.append(
+                (
+                    "项目经历",
+                    "\n\n".join(
+                        f"{project.name}\n"
+                        + "\n".join(f"· {bullet}" for bullet in project.bullets)
+                        for project in artifact.projects
+                    ),
+                )
+            )
+        if artifact.experiences:
+            blocks.append(
+                ("实习/工作经历", "\n".join(f"· {item}" for item in artifact.experiences))
+            )
+        if artifact.education:
+            blocks.append(("教育经历", "\n".join(f"· {item}" for item in artifact.education)))
+        blocks.append(("证据说明", artifact.evidence_notice))
+        if artifact.risk_notes:
+            blocks.append(
+                ("不建议直接写入的内容", "\n".join(f"· {note}" for note in artifact.risk_notes))
+            )
+        return blocks
+
     blocks = [
         ("目标关键词", _keyword_line(draft)),
         ("投递标题", draft.headline),
@@ -690,6 +993,33 @@ def _build_type0_pdf(pages: list[list[str]], page_width: float, page_height: flo
         ).encode("ascii")
     )
     return b"".join(chunks)
+
+
+def _fallback_summary(job: JobProfile, target_keywords: list[str]) -> str:
+    role = job.title or "目标岗位"
+    keyword_text = "、".join(target_keywords[:5]) if target_keywords else "已解析简历证据"
+    return f"面向{role}的候选人，具备{keyword_text}等真实项目或技能信号。"
+
+
+def _split_skills(text: str) -> list[str]:
+    normalized = text.replace("（已按目标 JD 优先级排序）", "")
+    return _unique([item.strip() for item in re.split(r"[,，、]", normalized) if item.strip()])
+
+
+def _project_bullets(description: str | None, skills: list[str], keywords: list[str]) -> list[str]:
+    bullets: list[str] = []
+    if description:
+        bullets.append(_clean_text(description))
+    matched_skills = _unique([skill for skill in skills if skill in keywords])
+    if matched_skills:
+        bullets.append(f"涉及技术：{'、'.join(matched_skills[:8])}。")
+    elif skills:
+        bullets.append(f"涉及技术：{'、'.join(skills[:8])}。")
+    return bullets or ["项目描述待补充，但不会自动编造未提供的经历。"]
+
+
+def _clean_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip(" ;；")
 
 
 def _target_keywords(resume: ResumeProfile, match: MatchProfile) -> list[str]:

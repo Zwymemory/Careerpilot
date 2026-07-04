@@ -6,14 +6,17 @@ import {
   approveRewriteDraft,
   collectJob,
   createApplicationRecord,
+  createEvalReport,
   createInterviewPack,
   createLoopRun,
   createMatch,
   createRewriteDraft,
   createRun,
+  evalReportHtmlUrl,
   exportRewritePdf,
   getRun,
   listApplications,
+  listEvalReports,
   listRuns,
   parseJob,
   parseResume,
@@ -25,6 +28,8 @@ import type {
   ApplicationRecord,
   ApplicationResponse,
   ApplicationStatus,
+  EvalReportSummary,
+  EvalRunResponse,
   InterviewPackResponse,
   JobCollectResponse,
   MatchResponse,
@@ -52,6 +57,7 @@ type WorkflowAction =
   | "application-record"
   | "application-feedback"
   | "application-status"
+  | "eval-harness"
   | "rewrite-draft"
   | "rewrite-approval"
   | "rewrite-export"
@@ -91,6 +97,8 @@ export default function App() {
   const [interviewResult, setInterviewResult] = useState<InterviewPackResponse | null>(null);
   const [applicationResult, setApplicationResult] = useState<ApplicationResponse | null>(null);
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
+  const [evalResult, setEvalResult] = useState<EvalRunResponse | null>(null);
+  const [evalReports, setEvalReports] = useState<EvalReportSummary[]>([]);
   const [workflowAction, setWorkflowAction] = useState<WorkflowAction | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [approvalNotes, setApprovalNotes] = useState("");
@@ -103,6 +111,10 @@ export default function App() {
   const [feedbackStrengths, setFeedbackStrengths] = useState("");
   const [feedbackConcerns, setFeedbackConcerns] = useState("");
   const [feedbackTasks, setFeedbackTasks] = useState("");
+  const [evalCaseName, setEvalCaseName] = useState("AI Agent 求职链路质量评测");
+  const [evalMinScore, setEvalMinScore] = useState(75);
+  const [evalExpectedKeywords, setEvalExpectedKeywords] =
+    useState("Python, FastAPI, Function Calling, AI Agent");
   const [isBooting, setIsBooting] = useState(true);
   const [bootProgress, setBootProgress] = useState(0);
   const [completionPulse, setCompletionPulse] = useState(false);
@@ -137,6 +149,11 @@ export default function App() {
   async function refreshApplications() {
     const data = await listApplications();
     setApplications(data);
+  }
+
+  async function refreshEvalReports() {
+    const data = await listEvalReports();
+    setEvalReports(data);
   }
 
   async function showRun(runId: string) {
@@ -181,6 +198,9 @@ export default function App() {
     });
     refreshApplications().catch((err: unknown) => {
       setWorkflowError(err instanceof Error ? err.message : "投递记录加载失败。");
+    });
+    refreshEvalReports().catch((err: unknown) => {
+      setWorkflowError(err instanceof Error ? err.message : "评测报告加载失败。");
     });
   }, []);
 
@@ -1059,6 +1079,45 @@ export default function App() {
     }
   }
 
+  async function handleRunEval() {
+    const activeApplication = applicationResult?.record ?? applications[0] ?? null;
+    const hasArtifacts = Boolean(
+      resumeResult || jobResult || matchResult || rewriteResult || interviewResult || activeApplication,
+    );
+    if (!hasArtifacts || workflowAction) {
+      setWorkflowError("EvalHarness 需要至少一个 W2-W8 产物。");
+      return;
+    }
+
+    setWorkflowAction("eval-harness");
+    setWorkflowError(null);
+    clearCompletionPulse();
+    try {
+      const result = await createEvalReport({
+        case_name: evalCaseName.trim() || "CareerPilot 质量评测",
+        judge_mode: "llm_as_judge_dry_run",
+        min_score: evalMinScore,
+        expected_keywords: splitInput(evalExpectedKeywords),
+        required_sections: ["summary", "skills", "project"],
+        ...(resumeResult ? { resume_profile: resumeResult.profile } : {}),
+        ...(jobResult ? { job_profile: jobResult.profile } : {}),
+        ...(matchResult ? { match_profile: matchResult.match } : {}),
+        ...(rewriteResult ? { rewrite_draft: rewriteResult.draft } : {}),
+        ...(interviewResult ? { interview_pack: interviewResult.pack } : {}),
+        ...(activeApplication ? { application_record: activeApplication } : {})
+      });
+      setEvalResult(result);
+      await showRun(result.run_id);
+      await refreshRuns();
+      await refreshEvalReports();
+      markRequestComplete();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "EvalHarness 评测失败。");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
   async function handleApproveLoopRun() {
     if (!activeRun || workflowAction) {
       return;
@@ -1179,6 +1238,9 @@ export default function App() {
   const canRunInterview = Boolean(resumeResult && jobResult);
   const canCreateApplication = Boolean(jobResult);
   const activeApplication = applicationResult?.record ?? applications[0] ?? null;
+  const canRunEval = Boolean(
+    resumeResult || jobResult || matchResult || rewriteResult || interviewResult || activeApplication,
+  );
   const canApproveRewrite =
     rewriteResult?.draft.approval_status === "WAITING_APPROVAL" &&
     activeRun?.run.run_id === rewriteResult.run_id &&
@@ -1410,6 +1472,12 @@ export default function App() {
               title="投递管理"
               text="保存投递记录、面试反馈、长期记忆和下一步任务。"
               active={Boolean(activeApplication)}
+            />
+            <ProductStep
+              index="07"
+              title="质量评测"
+              text="用规则评测和 QualityGate 检查证据链、改写风险和可导出质量。"
+              active={Boolean(evalResult)}
             />
           </div>
         </section>
@@ -1715,12 +1783,80 @@ export default function App() {
               </button>
             </div>
           </section>
+
+          <section className="product-panel product-panel-wide scroll-fade glass-surface liftable">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">第六步</p>
+                <h2>质量评测与 QualityGate</h2>
+              </div>
+              <span className="state-badge">W9</span>
+            </div>
+            <div className="eval-workspace">
+              <EvalSummary report={evalResult?.report ?? null} reports={evalReports} />
+              <div className="eval-side">
+                <p>
+                  EvalHarness 会检查解析覆盖、证据映射、改写证据锁定、面试准备完整度和
+                  CRM 记录质量。它不会替代人工判断，但会阻断明显无证据或风险过高的内容。
+                </p>
+                <label className="workflow-field workflow-field-compact">
+                  <span>评测名称</span>
+                  <input
+                    value={evalCaseName}
+                    onChange={(event) => setEvalCaseName(event.target.value)}
+                  />
+                </label>
+                <label className="workflow-field workflow-field-compact">
+                  <span>最低通过分</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={evalMinScore}
+                    onChange={(event) => setEvalMinScore(Number(event.target.value))}
+                  />
+                </label>
+                <label className="workflow-field workflow-field-compact">
+                  <span>期望关键词</span>
+                  <textarea
+                    value={evalExpectedKeywords}
+                    onChange={(event) => setEvalExpectedKeywords(event.target.value)}
+                    rows={3}
+                    placeholder="逗号或换行分隔"
+                  />
+                </label>
+                <div className="workflow-actions">
+                  <button
+                    className="primary-action liftable"
+                    type="button"
+                    onClick={handleRunEval}
+                    disabled={workflowAction !== null || !canRunEval}
+                  >
+                    {workflowAction === "eval-harness" ? "评测中" : "运行质量评测"}
+                  </button>
+                  {evalResult ? (
+                    <a
+                      className="ghost-action liftable"
+                      href={evalReportHtmlUrl(evalResult.report)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      打开 HTML 报告
+                    </a>
+                  ) : null}
+                </div>
+                {!canRunEval ? (
+                  <span className="match-hint">请先完成至少一个 W2-W8 步骤。</span>
+                ) : null}
+              </div>
+            </div>
+          </section>
         </section>
 
         <details className="developer-view glass-surface revealable">
           <summary>
             <span>开发者视图</span>
-            <strong>查看 Week2-7 Agent 运行细节、审批和 checkpoint</strong>
+            <strong>查看 Week2-9 Agent 运行细节、审批、checkpoint 和质量门禁</strong>
           </summary>
           <section className="workflow-board developer-workflow">
             <section className="workflow-panel workflow-panel-wide scroll-fade glass-surface liftable">
@@ -1975,6 +2111,36 @@ export default function App() {
                   </button>
                   {!canCreateApplication ? (
                     <span className="match-hint">请先完成 JD 解析。</span>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+
+            <section className="workflow-panel workflow-panel-wide scroll-fade glass-surface liftable">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Week9 EvalHarnessAgent</p>
+                  <h2>JSONL Case · Rule Grader · QualityGate · HTML Report</h2>
+                </div>
+                <span className="state-badge">W9</span>
+              </div>
+              <div className="eval-workspace">
+                <EvalSummary report={evalResult?.report ?? null} reports={evalReports} />
+                <div className="eval-side">
+                  <p>
+                    W9 对 W2-W8 的产物做规则评测：解析覆盖、证据链、改写风险、
+                    面试准备和 CRM 记忆都会进入报告。失败项会写入 run trace checkpoint。
+                  </p>
+                  <button
+                    className="primary-action liftable"
+                    type="button"
+                    onClick={handleRunEval}
+                    disabled={workflowAction !== null || !canRunEval}
+                  >
+                    {workflowAction === "eval-harness" ? "评测中" : "运行 Eval Harness"}
+                  </button>
+                  {!canRunEval ? (
+                    <span className="match-hint">请先生成任意 W2-W8 产物。</span>
                   ) : null}
                 </div>
               </div>
@@ -2277,6 +2443,7 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
   }
 
   const { draft } = result;
+  const tailored = draft.tailored_resume;
   const topChanges = draft.changes.slice(0, 5);
   const evidenceCount = draft.changes.reduce((sum, change) => sum + change.evidence.length, 0);
 
@@ -2284,10 +2451,10 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
     <article className="rewrite-summary">
       <div className="rewrite-header">
         <div>
-          <p className="eyebrow">改写草稿</p>
-          <h3>{draft.headline}</h3>
+          <p className="eyebrow">{tailored ? "中文投递稿" : "改写草稿"}</p>
+          <h3>{tailored?.headline ?? draft.headline}</h3>
           <div className="keyword-cloud">
-            {draft.target_keywords.slice(0, 8).map((keyword) => (
+            {(tailored?.skills ?? draft.target_keywords).slice(0, 8).map((keyword) => (
               <span className="keyword-match" key={`rewrite-keyword-${keyword}`}>
                 {keyword}
               </span>
@@ -2315,6 +2482,24 @@ function RewriteSummary({ result }: { result: ResumeRewriteResponse | null }) {
           <strong>{result.run_id.slice(0, 12)}</strong>
         </div>
       </div>
+
+      {tailored ? (
+        <div className="tailored-resume-preview">
+          <p className="eyebrow">个人概要</p>
+          <strong>{tailored.summary}</strong>
+          {tailored.projects.length ? (
+            <div className="tailored-projects">
+              {tailored.projects.slice(0, 2).map((project) => (
+                <div key={`tailored-${project.name}`}>
+                  <span>{project.name}</span>
+                  <p>{project.bullets[0]}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <small>{tailored.evidence_notice}</small>
+        </div>
+      ) : null}
 
       <div className="rewrite-change-list">
         {topChanges.map((change) => (
@@ -2579,6 +2764,108 @@ function ApplicationSummary({
   );
 }
 
+function EvalSummary({
+  report,
+  reports
+}: {
+  report: EvalRunResponse["report"] | null;
+  reports: EvalReportSummary[];
+}) {
+  if (!report) {
+    return (
+      <article className="eval-summary eval-summary-empty">
+        <div className="score-orb">
+          <strong>--</strong>
+          <span>评测</span>
+        </div>
+        <div>
+          <p className="eyebrow">等待 EvalHarnessAgent</p>
+          <h3>运行一次质量评测后，规则分数和 QualityGate 会显示在这里。</h3>
+          <p>W9 会把前面各 Week 的输出转成可验证报告，而不是只相信“看起来不错”。</p>
+          {reports.length ? (
+            <div className="eval-history">
+              {reports.slice(0, 3).map((item) => (
+                <span key={item.report_id}>
+                  {item.case_name} · {Math.round(item.overall_score)} · {item.decision}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </article>
+    );
+  }
+
+  const failedRules = report.rule_results.filter((rule) => rule.status === "failed");
+  const warningRules = report.rule_results.filter((rule) => rule.status === "warning");
+  const passedRules = report.rule_results.filter((rule) => rule.status === "passed");
+  const priorityRules = [...failedRules, ...warningRules, ...passedRules].slice(0, 7);
+
+  return (
+    <article className="eval-summary">
+      <div className="eval-topline">
+        <div className={`score-orb score-orb-on eval-decision-${report.gate.decision.toLowerCase()}`}>
+          <strong>{Math.round(report.overall_score)}</strong>
+          <span>{report.gate.decision}</span>
+        </div>
+        <div>
+          <p className="eyebrow">QualityGate</p>
+          <h3>{formatEvalDecision(report.gate.decision)}</h3>
+          <p>{report.summary}</p>
+          <div className="keyword-cloud">
+            {report.evaluated_artifacts.map((artifact) => (
+              <span className="keyword-match" key={`eval-artifact-${artifact}`}>
+                {formatEvalArtifact(artifact)}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="eval-metrics">
+        <div>
+          <span>通过</span>
+          <strong>{passedRules.length}</strong>
+        </div>
+        <div>
+          <span>警告</span>
+          <strong>{warningRules.length}</strong>
+        </div>
+        <div>
+          <span>失败</span>
+          <strong>{failedRules.length}</strong>
+        </div>
+        <div>
+          <span>模式</span>
+          <strong>{report.judge_mode === "rule_based" ? "规则" : "Judge"}</strong>
+        </div>
+      </div>
+
+      <div className="eval-rule-list">
+        {priorityRules.map((rule) => (
+          <div className={`eval-rule eval-rule-${rule.status}`} key={rule.rule_id}>
+            <span>{formatEvalArtifact(rule.category)} · {formatEvalRuleStatus(rule.status)}</span>
+            <strong>{rule.name}</strong>
+            <p>{rule.message}</p>
+            {rule.evidence.length ? (
+              <em>{rule.evidence.slice(0, 3).join(" / ")}</em>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      {report.gate.release_notes.length ? (
+        <div className="eval-release-notes">
+          <p className="eyebrow">放行说明</p>
+          {report.gate.release_notes.map((note) => (
+            <span key={note}>{note}</span>
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 function formatState(state: string): string {
   const labels: Record<string, string> = {
     IDLE: "空闲",
@@ -2703,6 +2990,36 @@ function formatMemoryCategory(category: string): string {
     follow_up: "跟进"
   };
   return labels[category] ?? titleizeToken(category);
+}
+
+function formatEvalDecision(decision: string): string {
+  const labels: Record<string, string> = {
+    PASS: "通过，可以进入人工确认",
+    WARN: "可继续，但建议处理警告",
+    BLOCK: "已阻断，需要先修复风险"
+  };
+  return labels[decision] ?? decision;
+}
+
+function formatEvalArtifact(artifact: string): string {
+  const labels: Record<string, string> = {
+    parser: "解析",
+    matching: "匹配",
+    rewrite: "改写",
+    interview: "面试",
+    application: "CRM",
+    judge: "Judge"
+  };
+  return labels[artifact] ?? titleizeToken(artifact);
+}
+
+function formatEvalRuleStatus(status: string): string {
+  const labels: Record<string, string> = {
+    passed: "通过",
+    warning: "警告",
+    failed: "失败"
+  };
+  return labels[status] ?? titleizeToken(status);
 }
 
 function formatRewriteSection(section: string): string {
