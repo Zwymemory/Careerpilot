@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
+  addApplicationFeedback,
   approveLoopRun,
   approveRewriteDraft,
   collectJob,
+  createApplicationRecord,
   createInterviewPack,
   createLoopRun,
   createMatch,
@@ -11,13 +13,18 @@ import {
   createRun,
   exportRewritePdf,
   getRun,
+  listApplications,
   listRuns,
   parseJob,
   parseResume,
-  resumeLoopRun
+  resumeLoopRun,
+  updateApplicationStatus
 } from "./api/client";
 import { RunTrace } from "./components/RunTrace";
 import type {
+  ApplicationRecord,
+  ApplicationResponse,
+  ApplicationStatus,
   InterviewPackResponse,
   JobCollectResponse,
   MatchResponse,
@@ -42,6 +49,9 @@ type WorkflowAction =
   | "intake-analysis"
   | "match-agent"
   | "interview-pack"
+  | "application-record"
+  | "application-feedback"
+  | "application-status"
   | "rewrite-draft"
   | "rewrite-approval"
   | "rewrite-export"
@@ -79,10 +89,20 @@ export default function App() {
   const [matchResult, setMatchResult] = useState<MatchResponse | null>(null);
   const [rewriteResult, setRewriteResult] = useState<ResumeRewriteResponse | null>(null);
   const [interviewResult, setInterviewResult] = useState<InterviewPackResponse | null>(null);
+  const [applicationResult, setApplicationResult] = useState<ApplicationResponse | null>(null);
+  const [applications, setApplications] = useState<ApplicationRecord[]>([]);
   const [workflowAction, setWorkflowAction] = useState<WorkflowAction | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [approvalNotes, setApprovalNotes] = useState("");
   const [rewriteApprovalNotes, setRewriteApprovalNotes] = useState("");
+  const [applicationNotes, setApplicationNotes] = useState("准备投递前确认岗位、简历和面试材料。");
+  const [applicationStatusDraft, setApplicationStatusDraft] =
+    useState<ApplicationStatus>("READY_TO_APPLY");
+  const [feedbackStage, setFeedbackStage] = useState("初面");
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackStrengths, setFeedbackStrengths] = useState("");
+  const [feedbackConcerns, setFeedbackConcerns] = useState("");
+  const [feedbackTasks, setFeedbackTasks] = useState("");
   const [isBooting, setIsBooting] = useState(true);
   const [bootProgress, setBootProgress] = useState(0);
   const [completionPulse, setCompletionPulse] = useState(false);
@@ -112,6 +132,11 @@ export default function App() {
   async function refreshRuns() {
     const data = await listRuns();
     setRuns(data);
+  }
+
+  async function refreshApplications() {
+    const data = await listApplications();
+    setApplications(data);
   }
 
   async function showRun(runId: string) {
@@ -153,6 +178,9 @@ export default function App() {
   useEffect(() => {
     refreshRuns().catch((err: unknown) => {
       setError(err instanceof Error ? err.message : "运行记录加载失败。");
+    });
+    refreshApplications().catch((err: unknown) => {
+      setWorkflowError(err instanceof Error ? err.message : "投递记录加载失败。");
     });
   }, []);
 
@@ -924,6 +952,113 @@ export default function App() {
     }
   }
 
+  async function handleCreateApplicationRecord() {
+    if (!jobResult || workflowAction) {
+      setWorkflowError("ApplicationCRMAgent 需要先完成 JD 解析。");
+      return;
+    }
+
+    setWorkflowAction("application-record");
+    setWorkflowError(null);
+    clearCompletionPulse();
+    try {
+      const sourceRunIds = [
+        resumeResult?.run_id,
+        jobResult.run_id,
+        jobCollectResult?.run_id,
+        matchResult?.run_id,
+        rewriteResult?.run_id,
+        interviewResult?.run_id
+      ].filter((value): value is string => Boolean(value));
+      const result = await createApplicationRecord({
+        job_profile: jobResult.profile,
+        ...(resumeResult ? { resume_profile: resumeResult.profile } : {}),
+        ...(matchResult ? { match_profile: matchResult.match } : {}),
+        ...(rewriteResult ? { rewrite_draft: rewriteResult.draft } : {}),
+        ...(interviewResult ? { interview_pack: interviewResult.pack } : {}),
+        ...(jobUrl.trim() ? { job_url: jobUrl.trim() } : {}),
+        status: applicationStatusDraft,
+        notes: applicationNotes.trim() || undefined,
+        source_run_ids: sourceRunIds
+      });
+      setApplicationResult(result);
+      await showRun(result.run_id);
+      await refreshRuns();
+      await refreshApplications();
+      markRequestComplete();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "ApplicationCRMAgent 保存失败。");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleAddApplicationFeedback() {
+    const activeApplication = applicationResult?.record ?? applications[0];
+    if (!activeApplication || workflowAction) {
+      setWorkflowError("请先保存一条投递记录。");
+      return;
+    }
+    if (feedbackText.trim().length < 4) {
+      setWorkflowError("面试反馈至少需要 4 个字符。");
+      return;
+    }
+
+    setWorkflowAction("application-feedback");
+    setWorkflowError(null);
+    clearCompletionPulse();
+    try {
+      const result = await addApplicationFeedback(activeApplication.application_id, {
+        stage: feedbackStage.trim() || "面试",
+        feedback_text: feedbackText.trim(),
+        strengths: splitInput(feedbackStrengths),
+        concerns: splitInput(feedbackConcerns),
+        follow_up_tasks: splitInput(feedbackTasks)
+      });
+      setApplicationResult(result);
+      setFeedbackText("");
+      setFeedbackStrengths("");
+      setFeedbackConcerns("");
+      setFeedbackTasks("");
+      await showRun(result.run_id);
+      await refreshRuns();
+      await refreshApplications();
+      markRequestComplete();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "面试反馈保存失败。");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleUpdateApplicationStatus() {
+    const activeApplication = applicationResult?.record ?? applications[0];
+    if (!activeApplication || workflowAction) {
+      setWorkflowError("请先保存一条投递记录。");
+      return;
+    }
+
+    setWorkflowAction("application-status");
+    setWorkflowError(null);
+    clearCompletionPulse();
+    try {
+      const result = await updateApplicationStatus(
+        activeApplication.application_id,
+        applicationStatusDraft,
+        applicationNotes.trim() || undefined,
+      );
+      setApplicationResult(result);
+      await showRun(result.run_id);
+      await refreshRuns();
+      await refreshApplications();
+      markRequestComplete();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "投递状态更新失败。");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
   async function handleApproveLoopRun() {
     if (!activeRun || workflowAction) {
       return;
@@ -1042,6 +1177,8 @@ export default function App() {
   const canRunMatch = Boolean(resumeResult && jobResult);
   const canRunRewrite = Boolean(resumeResult && jobResult && matchResult);
   const canRunInterview = Boolean(resumeResult && jobResult);
+  const canCreateApplication = Boolean(jobResult);
+  const activeApplication = applicationResult?.record ?? applications[0] ?? null;
   const canApproveRewrite =
     rewriteResult?.draft.approval_status === "WAITING_APPROVAL" &&
     activeRun?.run.run_id === rewriteResult.run_id &&
@@ -1268,6 +1405,12 @@ export default function App() {
               text="生成面试题预测、项目追问、STAR 讲法和复习清单。"
               active={Boolean(interviewResult)}
             />
+            <ProductStep
+              index="06"
+              title="投递管理"
+              text="保存投递记录、面试反馈、长期记忆和下一步任务。"
+              active={Boolean(activeApplication)}
+            />
           </div>
         </section>
 
@@ -1448,6 +1591,128 @@ export default function App() {
                   <span className="match-hint">请先解析经历和 JD。</span>
                 ) : null}
               </div>
+            </div>
+          </section>
+
+          <section className="product-panel product-panel-wide scroll-fade glass-surface liftable">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">第五步</p>
+                <h2>投递 CRM 与长期记忆</h2>
+              </div>
+              <span className="state-badge">W8</span>
+            </div>
+            <div className="application-workspace">
+              <ApplicationSummary record={activeApplication} applications={applications} />
+              <div className="application-side">
+                <p>
+                  ApplicationCRMAgent 会把岗位、匹配报告、改写稿、面试包和反馈保存成一条
+                  可继续追踪的投递记录。它只管理记录和下一步任务，不会自动替你投递。
+                </p>
+                <label className="workflow-field workflow-field-compact">
+                  <span>投递状态</span>
+                  <select
+                    value={applicationStatusDraft}
+                    onChange={(event) =>
+                      setApplicationStatusDraft(event.target.value as ApplicationStatus)
+                    }
+                  >
+                    <option value="SAVED">已收藏</option>
+                    <option value="READY_TO_APPLY">准备投递</option>
+                    <option value="APPLIED">已投递</option>
+                    <option value="INTERVIEWING">面试中</option>
+                    <option value="OFFER">已 Offer</option>
+                    <option value="REJECTED">未通过</option>
+                    <option value="ARCHIVED">已归档</option>
+                  </select>
+                </label>
+                <label className="workflow-field workflow-field-compact">
+                  <span>记录备注</span>
+                  <textarea
+                    value={applicationNotes}
+                    onChange={(event) => setApplicationNotes(event.target.value)}
+                    rows={3}
+                    placeholder="例如：本周投递，面试前重点复习 SQL"
+                  />
+                </label>
+                <div className="workflow-actions">
+                  <button
+                    className="primary-action liftable"
+                    type="button"
+                    onClick={handleCreateApplicationRecord}
+                    disabled={workflowAction !== null || !canCreateApplication}
+                  >
+                    {workflowAction === "application-record" ? "保存中" : "保存投递记录"}
+                  </button>
+                  <button
+                    className="ghost-action liftable"
+                    type="button"
+                    onClick={handleUpdateApplicationStatus}
+                    disabled={workflowAction !== null || !activeApplication}
+                  >
+                    {workflowAction === "application-status" ? "更新中" : "更新状态"}
+                  </button>
+                </div>
+                {!canCreateApplication ? (
+                  <span className="match-hint">请先解析目标 JD。</span>
+                ) : null}
+              </div>
+            </div>
+            <div className="feedback-box">
+              <div className="feedback-fields">
+                <label className="workflow-field workflow-field-compact">
+                  <span>面试阶段</span>
+                  <input
+                    value={feedbackStage}
+                    onChange={(event) => setFeedbackStage(event.target.value)}
+                    placeholder="初面 / 二面 / HR 面"
+                  />
+                </label>
+                <label className="workflow-field workflow-field-compact feedback-main">
+                  <span>面试反馈</span>
+                  <textarea
+                    value={feedbackText}
+                    onChange={(event) => setFeedbackText(event.target.value)}
+                    rows={3}
+                    placeholder="记录真实反馈，例如：项目讲得清楚，但 SQL 细节需要补强"
+                  />
+                </label>
+                <label className="workflow-field workflow-field-compact">
+                  <span>正向信号</span>
+                  <textarea
+                    value={feedbackStrengths}
+                    onChange={(event) => setFeedbackStrengths(event.target.value)}
+                    rows={2}
+                    placeholder="逗号或换行分隔"
+                  />
+                </label>
+                <label className="workflow-field workflow-field-compact">
+                  <span>暴露问题</span>
+                  <textarea
+                    value={feedbackConcerns}
+                    onChange={(event) => setFeedbackConcerns(event.target.value)}
+                    rows={2}
+                    placeholder="逗号或换行分隔"
+                  />
+                </label>
+                <label className="workflow-field workflow-field-compact feedback-main">
+                  <span>下一步任务</span>
+                  <textarea
+                    value={feedbackTasks}
+                    onChange={(event) => setFeedbackTasks(event.target.value)}
+                    rows={2}
+                    placeholder="补 SQL 查询练习；准备 Function Calling 调用链讲法"
+                  />
+                </label>
+              </div>
+              <button
+                className="ghost-action liftable"
+                type="button"
+                onClick={handleAddApplicationFeedback}
+                disabled={workflowAction !== null || !activeApplication}
+              >
+                {workflowAction === "application-feedback" ? "记录中" : "添加面试反馈"}
+              </button>
             </div>
           </section>
         </section>
@@ -1680,6 +1945,36 @@ export default function App() {
                   </button>
                   {!canRunInterview ? (
                     <span className="match-hint">请先完成经历和 JD 解析。</span>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+
+            <section className="workflow-panel workflow-panel-wide scroll-fade glass-surface liftable">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Week8 ApplicationCRMAgent</p>
+                  <h2>投递记录 · 面试反馈 · 长期记忆</h2>
+                </div>
+                <span className="state-badge">W8</span>
+              </div>
+              <div className="application-workspace">
+                <ApplicationSummary record={activeApplication} applications={applications} />
+                <div className="application-side">
+                  <p>
+                    W8 把单次 Agent 输出沉淀成长期求职 CRM：投递状态、记忆、反馈、
+                    下一步任务都会进入 ApplicationRecord，并保存 checkpoint。
+                  </p>
+                  <button
+                    className="primary-action liftable"
+                    type="button"
+                    onClick={handleCreateApplicationRecord}
+                    disabled={workflowAction !== null || !canCreateApplication}
+                  >
+                    {workflowAction === "application-record" ? "保存中" : "运行 CRM Agent"}
+                  </button>
+                  {!canCreateApplication ? (
+                    <span className="match-hint">请先完成 JD 解析。</span>
                   ) : null}
                 </div>
               </div>
@@ -2171,6 +2466,119 @@ function InterviewSummary({ result }: { result: InterviewPackResponse | null }) 
   );
 }
 
+function ApplicationSummary({
+  record,
+  applications
+}: {
+  record: ApplicationRecord | null;
+  applications: ApplicationRecord[];
+}) {
+  if (!record) {
+    return (
+      <article className="application-summary application-summary-empty">
+        <div className="score-orb">
+          <strong>--</strong>
+          <span>记录</span>
+        </div>
+        <div>
+          <p className="eyebrow">等待 ApplicationCRMAgent</p>
+          <h3>保存第一条投递记录后，长期记忆和下一步任务会显示在这里。</h3>
+          <p>W8 会把岗位、匹配、改写、面试准备和反馈沉淀为可追踪 CRM。</p>
+        </div>
+      </article>
+    );
+  }
+
+  const openTasks = record.tasks.filter((task) => task.status === "OPEN").slice(0, 5);
+  const topMemories = record.memories.slice(0, 6);
+  const recentApplications = applications.slice(0, 4);
+
+  return (
+    <article className="application-summary">
+      <div className="application-topline">
+        <div className="score-orb score-orb-on">
+          <strong>{formatApplicationStatusShort(record.status)}</strong>
+          <span>状态</span>
+        </div>
+        <div>
+          <p className="eyebrow">投递记录</p>
+          <h3>{record.company ?? "目标公司"} · {record.title ?? "目标岗位"}</h3>
+          <div className="keyword-cloud">
+            {record.target_keywords.slice(0, 9).map((keyword) => (
+              <span className="keyword-match" key={`application-keyword-${keyword}`}>
+                {keyword}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="application-metrics">
+        <div>
+          <span>匹配分</span>
+          <strong>{record.match_score == null ? "--" : Math.round(record.match_score)}</strong>
+        </div>
+        <div>
+          <span>面试准备分</span>
+          <strong>
+            {record.interview_score == null ? "--" : Math.round(record.interview_score)}
+          </strong>
+        </div>
+        <div>
+          <span>记忆</span>
+          <strong>{record.memories.length}</strong>
+        </div>
+        <div>
+          <span>任务</span>
+          <strong>{openTasks.length}</strong>
+        </div>
+      </div>
+
+      <div className="application-section-grid">
+        <section>
+          <p className="eyebrow">长期记忆</p>
+          {topMemories.map((memory) => (
+            <div className="application-card" key={memory.memory_id}>
+              <span>{formatMemoryCategory(memory.category)} · {memory.source}</span>
+              <strong>{memory.text}</strong>
+            </div>
+          ))}
+        </section>
+        <section>
+          <p className="eyebrow">下一步任务</p>
+          {openTasks.length ? (
+            openTasks.map((task) => (
+              <div className="application-card" key={task.task_id}>
+                <span>{task.priority} · {task.due_hint ?? "待安排"}</span>
+                <strong>{task.title}</strong>
+                <p>{task.reason}</p>
+              </div>
+            ))
+          ) : (
+            <div className="application-card">
+              <span>完成</span>
+              <strong>暂无打开任务。</strong>
+            </div>
+          )}
+        </section>
+      </div>
+
+      {recentApplications.length ? (
+        <div className="application-list">
+          <p className="eyebrow">最近投递</p>
+          {recentApplications.map((item) => (
+            <div className="application-row" key={item.application_id}>
+              <span>{item.company ?? "未知公司"}</span>
+              <strong>{item.title ?? "未知岗位"}</strong>
+              <em>{formatApplicationStatus(item.status)}</em>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 function formatState(state: string): string {
   const labels: Record<string, string> = {
     IDLE: "空闲",
@@ -2260,6 +2668,43 @@ function formatKnowledgeSignal(signal: string): string {
   return labels[signal] ?? titleizeToken(signal);
 }
 
+function formatApplicationStatus(status: string): string {
+  const labels: Record<string, string> = {
+    SAVED: "已收藏",
+    READY_TO_APPLY: "准备投递",
+    APPLIED: "已投递",
+    INTERVIEWING: "面试中",
+    OFFER: "已 Offer",
+    REJECTED: "未通过",
+    ARCHIVED: "已归档"
+  };
+  return labels[status] ?? formatState(status);
+}
+
+function formatApplicationStatusShort(status: string): string {
+  const labels: Record<string, string> = {
+    SAVED: "藏",
+    READY_TO_APPLY: "备",
+    APPLIED: "投",
+    INTERVIEWING: "面",
+    OFFER: "O",
+    REJECTED: "拒",
+    ARCHIVED: "档"
+  };
+  return labels[status] ?? status.slice(0, 2);
+}
+
+function formatMemoryCategory(category: string): string {
+  const labels: Record<string, string> = {
+    strength: "优势",
+    gap: "缺口",
+    preference: "偏好",
+    feedback: "反馈",
+    follow_up: "跟进"
+  };
+  return labels[category] ?? titleizeToken(category);
+}
+
 function formatRewriteSection(section: string): string {
   const labels: Record<string, string> = {
     summary: "个人概要",
@@ -2289,6 +2734,13 @@ function titleizeToken(value: string): string {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
+}
+
+function splitInput(value: string): string[] {
+  return value
+    .split(/[\n,，;；]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 declare global {

@@ -1121,7 +1121,7 @@ h3 {
 
 .journey-steps {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1286,10 +1286,10 @@ h3 {
   text-transform: uppercase;
 }
 
-.workflow-field textarea {
+.workflow-field textarea,
+.workflow-field input,
+.workflow-field select {
   width: 100%;
-  min-height: 132px;
-  resize: none;
   border: 1px solid rgba(255, 255, 255, 0.62);
   border-radius: 8px;
   outline: 0;
@@ -1305,7 +1305,19 @@ h3 {
   line-height: 1.55;
 }
 
-.workflow-field textarea:focus {
+.workflow-field textarea {
+  min-height: 132px;
+  resize: none;
+}
+
+.workflow-field input,
+.workflow-field select {
+  min-height: 42px;
+}
+
+.workflow-field textarea:focus,
+.workflow-field input:focus,
+.workflow-field select:focus {
   border-color: rgba(255, 255, 255, 0.86);
   box-shadow:
     0 0 0 3px rgba(111, 190, 206, 0.14),
@@ -2117,6 +2129,174 @@ h3 {
   background:
     radial-gradient(circle at 16% 10%, rgba(255, 255, 255, 0.5), transparent 36%),
     rgba(255, 255, 255, 0.22);
+}
+
+.application-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  gap: 14px;
+}
+
+.application-summary {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 12% 6%, rgba(255, 255, 255, 0.5), transparent 42%),
+    radial-gradient(circle at 90% 92%, rgba(238, 197, 112, 0.13), transparent 50%),
+    rgba(255, 255, 255, 0.22);
+  box-shadow: 0 16px 38px rgba(59, 111, 139, 0.08);
+}
+
+.application-summary-empty {
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+  min-height: 220px;
+  opacity: 0.76;
+}
+
+.application-topline {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.application-summary h3 {
+  margin-bottom: 10px;
+  color: #172b3a;
+  line-height: 1.32;
+}
+
+.application-summary p,
+.application-side p {
+  margin-bottom: 0;
+  color: rgba(31, 54, 69, 0.72);
+  line-height: 1.56;
+}
+
+.application-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.application-metrics div,
+.application-card {
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.1)),
+    rgba(255, 255, 255, 0.18);
+}
+
+.application-metrics div {
+  padding: 10px;
+}
+
+.application-metrics span,
+.application-card span {
+  display: block;
+  color: rgba(48, 72, 86, 0.64);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.application-metrics strong {
+  display: block;
+  margin-top: 7px;
+  color: #172b3a;
+  font-size: 20px;
+}
+
+.application-section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.application-card {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 11px 12px;
+}
+
+.application-card strong {
+  color: #172b3a;
+  line-height: 1.42;
+}
+
+.application-card p {
+  font-size: 13px;
+}
+
+.application-list {
+  display: grid;
+  gap: 8px;
+}
+
+.application-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.application-row span,
+.application-row em {
+  color: rgba(48, 72, 86, 0.68);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 780;
+}
+
+.application-row strong {
+  color: #172b3a;
+  overflow-wrap: anywhere;
+}
+
+.application-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 16% 10%, rgba(255, 255, 255, 0.5), transparent 36%),
+    rgba(255, 255, 255, 0.22);
+}
+
+.feedback-box {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  padding: 14px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.1)),
+    rgba(255, 255, 255, 0.17);
+}
+
+.feedback-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.45fr) minmax(0, 1fr) minmax(220px, 0.55fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.feedback-main {
+  grid-column: span 2;
 }
 
 .trace-layout {

@@ -1,4 +1,7 @@
 import type {
+  ApplicationResponse,
+  ApplicationStatus,
+  ApplicationRecord,
   InterviewPackResponse,
   JobCollectResponse,
   JobProfile,
@@ -159,6 +162,64 @@ export function createInterviewPack(payload: {
     method: "POST",
     body: JSON.stringify({
       ...payload,
+      user_id: "local-user"
+    })
+  });
+}
+
+export function listApplications(userId = "local-user"): Promise<ApplicationRecord[]> {
+  return request<ApplicationRecord[]>(`/api/applications?user_id=${encodeURIComponent(userId)}`);
+}
+
+export function createApplicationRecord(payload: {
+  job_profile: JobProfile;
+  resume_profile?: ResumeProfile;
+  match_profile?: MatchProfile;
+  rewrite_draft?: ResumeRewriteResponse["draft"];
+  interview_pack?: InterviewPackResponse["pack"];
+  job_url?: string;
+  status?: ApplicationStatus;
+  notes?: string;
+  source_run_ids?: string[];
+}): Promise<ApplicationResponse> {
+  return request<ApplicationResponse>("/api/applications", {
+    method: "POST",
+    body: JSON.stringify({
+      ...payload,
+      user_id: "local-user"
+    })
+  });
+}
+
+export function addApplicationFeedback(
+  applicationId: string,
+  payload: {
+    stage: string;
+    feedback_text: string;
+    strengths?: string[];
+    concerns?: string[];
+    follow_up_tasks?: string[];
+  },
+): Promise<ApplicationResponse> {
+  return request<ApplicationResponse>(`/api/applications/${applicationId}/feedback`, {
+    method: "POST",
+    body: JSON.stringify({
+      ...payload,
+      user_id: "local-user"
+    })
+  });
+}
+
+export function updateApplicationStatus(
+  applicationId: string,
+  statusValue: ApplicationStatus,
+  notes?: string,
+): Promise<ApplicationResponse> {
+  return request<ApplicationResponse>(`/api/applications/${applicationId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      status: statusValue,
+      notes: notes || null,
       user_id: "local-user"
     })
   });

@@ -123,7 +123,10 @@ function formatStepName(name: string): string {
     rewrite_export: "PDF 导出",
     job_collect: "岗位收集",
     parse_collected_job: "收集结果解析",
-    interview_generate: "面试准备包"
+    interview_generate: "面试准备包",
+    application_record: "投递记录",
+    interview_feedback: "面试反馈",
+    application_status: "投递状态"
   };
   return labels[name] ?? titleizeToken(name);
 }
@@ -236,6 +239,35 @@ function localizeTraceText(text: string): string {
         `已生成面试包：${questions} 个预测题、${followups} 个项目追问、${stars} 个 STAR 草稿，准备分 ${score}/100。`,
     )
     .replace("Interview pack generation failed.", "面试准备包生成失败。")
+    .replace(
+      /Create CRM record for (.+) \/ (.+); match=(yes|no), interview=(yes|no)\./g,
+      (_, company: string, title: string, match: string, interview: string) =>
+        `为 ${company} / ${title} 创建 CRM 记录；匹配报告：${match === "yes" ? "已提供" : "未提供"}，面试包：${interview === "yes" ? "已提供" : "未提供"}。`,
+    )
+    .replace(
+      /Created application record with (\d+) memory item\(s\), (\d+) next task\(s\), and status ([A-Z_]+)\./g,
+      (_, memories: string, tasks: string, state: string) =>
+        `已创建投递记录：${memories} 条记忆，${tasks} 个下一步任务，状态为 ${formatApplicationStatus(state)}。`,
+    )
+    .replace(
+      /Add (.+) feedback with (\d+) strength\(s\), (\d+) concern\(s\), and (\d+) follow-up task\(s\)\./g,
+      (_, stage: string, strengths: string, concerns: string, tasks: string) =>
+        `追加 ${stage} 反馈：${strengths} 个正向信号，${concerns} 个问题，${tasks} 个跟进任务。`,
+    )
+    .replace(
+      /Updated application memory to (\d+) item\(s\) and (\d+) task\(s\)\./g,
+      (_, memories: string, tasks: string) =>
+        `已更新投递记忆：${memories} 条记忆，${tasks} 个任务。`,
+    )
+    .replace(
+      /Update application status from ([A-Z_]+) to ([A-Z_]+)\./g,
+      (_, from: string, to: string) =>
+        `将投递状态从 ${formatApplicationStatus(from)} 更新为 ${formatApplicationStatus(to)}。`,
+    )
+    .replace(
+      /Application status updated to ([A-Z_]+)\./g,
+      (_, state: string) => `投递状态已更新为 ${formatApplicationStatus(state)}。`,
+    )
     .replace(/State changed to ([A-Z_]+)\./g, (_, state: string) => `状态已切换为${formatRunState(state)}。`)
     .replace(/Step ([a-zA-Z0-9_/-]+) started\./g, (_, name: string) => `步骤“${formatStepName(name)}”已开始。`)
     .replace(/Step ([a-zA-Z0-9_/-]+) completed\./g, (_, name: string) => `步骤“${formatStepName(name)}”已完成。`)
@@ -246,6 +278,19 @@ function localizeTraceText(text: string): string {
     .replace(/Planned stages: ([^.]+)\./g, (_, stages: string) => `已规划阶段：${stages}。`)
     .replace(/Executed tools: ([^.]+)\./g, (_, tools: string) => `已执行工具：${tools}。`)
     .replace(/Reflection produced next actions: ([^.]+)\./g, (_, actions: string) => `反思阶段给出下一步动作：${actions}。`);
+}
+
+function formatApplicationStatus(status: string): string {
+  const labels: Record<string, string> = {
+    SAVED: "已收藏",
+    READY_TO_APPLY: "准备投递",
+    APPLIED: "已投递",
+    INTERVIEWING: "面试中",
+    OFFER: "已 Offer",
+    REJECTED: "未通过",
+    ARCHIVED: "已归档"
+  };
+  return labels[status] ?? titleizeToken(status);
 }
 
 function formatCollectorSource(source: string): string {

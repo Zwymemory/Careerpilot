@@ -350,3 +350,68 @@ export interface InterviewPackResponse {
   run_id: string;
   pack: InterviewPack;
 }
+
+export type ApplicationStatus =
+  | "SAVED"
+  | "READY_TO_APPLY"
+  | "APPLIED"
+  | "INTERVIEWING"
+  | "OFFER"
+  | "REJECTED"
+  | "ARCHIVED";
+
+export interface ApplicationMemory {
+  memory_id: string;
+  category: "strength" | "gap" | "preference" | "feedback" | "follow_up";
+  text: string;
+  source: string;
+  confidence: number;
+  evidence: EvidenceItem[];
+  created_at: string;
+}
+
+export interface ApplicationTask {
+  task_id: string;
+  title: string;
+  reason: string;
+  priority: "P0" | "P1" | "P2";
+  status: "OPEN" | "DONE";
+  due_hint: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface InterviewFeedback {
+  feedback_id: string;
+  stage: string;
+  feedback_text: string;
+  strengths: string[];
+  concerns: string[];
+  follow_up_tasks: string[];
+  created_at: string;
+}
+
+export interface ApplicationRecord {
+  application_id: string;
+  user_id: string;
+  company: string | null;
+  title: string | null;
+  job_url: string | null;
+  status: ApplicationStatus;
+  match_score: number | null;
+  interview_score: number | null;
+  resume_headline: string | null;
+  target_keywords: string[];
+  notes: string | null;
+  memories: ApplicationMemory[];
+  tasks: ApplicationTask[];
+  feedback: InterviewFeedback[];
+  source_run_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApplicationResponse {
+  run_id: string;
+  record: ApplicationRecord;
+}
