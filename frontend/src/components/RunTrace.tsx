@@ -120,7 +120,9 @@ function formatStepName(name: string): string {
     match_agent: "匹配分析",
     rewrite_draft: "改写草稿",
     rewrite_approval: "改写审批",
-    rewrite_export: "PDF 导出"
+    rewrite_export: "PDF 导出",
+    job_collect: "岗位收集",
+    parse_collected_job: "收集结果解析"
   };
   return labels[name] ?? titleizeToken(name);
 }
@@ -198,6 +200,30 @@ function localizeTraceText(text: string): string {
     .replace("JD parser LLM call completed.", "JD 解析 LLM 调用已完成。")
     .replace("Human approval completed.", "人工审批已完成。")
     .replace("Resume rewrite approval completed.", "简历改写审批已完成。")
+    .replace("Collected JD parsing failed.", "收集到的岗位 JD 解析失败。")
+    .replace(/Collect job posting from URL: (.+)$/g, (_, url: string) => `从公开岗位链接收集 JD：${url}`)
+    .replace(
+      /Collect job posting from text with (\d+) characters\./g,
+      (_, count: string) => `从粘贴文本收集 ${count} 个字符的岗位 JD。`,
+    )
+    .replace(
+      /Collect job posting from HTML with (\d+) characters\./g,
+      (_, count: string) => `从 HTML 片段收集 ${count} 个字符的岗位 JD。`,
+    )
+    .replace(
+      /Collected (\d+) characters from ([a-z]+); screenshot=([a-z]+)\./g,
+      (_, count: string, source: string, screenshot: string) =>
+        `已从${formatCollectorSource(source)}收集 ${count} 个字符；截图状态：${formatScreenshotStatus(screenshot)}。`,
+    )
+    .replace(
+      /Parse collected JD text with (\d+) characters\./g,
+      (_, count: string) => `解析已收集的 ${count} 个字符岗位 JD。`,
+    )
+    .replace(
+      /Collected JD parsed: (\d+) hard requirements, (\d+) nice-to-have items, (\d+) tech keywords\./g,
+      (_, hard: string, nice: string, keywords: string) =>
+        `收集到的 JD 已解析：${hard} 个硬性要求，${nice} 个加分项，${keywords} 个技术关键词。`,
+    )
     .replace(/State changed to ([A-Z_]+)\./g, (_, state: string) => `状态已切换为${formatRunState(state)}。`)
     .replace(/Step ([a-zA-Z0-9_/-]+) started\./g, (_, name: string) => `步骤“${formatStepName(name)}”已开始。`)
     .replace(/Step ([a-zA-Z0-9_/-]+) completed\./g, (_, name: string) => `步骤“${formatStepName(name)}”已完成。`)
@@ -208,6 +234,24 @@ function localizeTraceText(text: string): string {
     .replace(/Planned stages: ([^.]+)\./g, (_, stages: string) => `已规划阶段：${stages}。`)
     .replace(/Executed tools: ([^.]+)\./g, (_, tools: string) => `已执行工具：${tools}。`)
     .replace(/Reflection produced next actions: ([^.]+)\./g, (_, actions: string) => `反思阶段给出下一步动作：${actions}。`);
+}
+
+function formatCollectorSource(source: string): string {
+  const labels: Record<string, string> = {
+    url: "公开链接",
+    html: "HTML",
+    text: "文本"
+  };
+  return labels[source] ?? titleizeToken(source);
+}
+
+function formatScreenshotStatus(status: string): string {
+  const labels: Record<string, string> = {
+    captured: "已截图",
+    skipped: "未请求",
+    unavailable: "不可用"
+  };
+  return labels[status] ?? titleizeToken(status);
 }
 
 function titleizeToken(value: string): string {

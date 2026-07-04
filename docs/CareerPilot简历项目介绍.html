@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CareerPilot 简历项目介绍</title>
+    <style>
+      :root {
+        color: #182236;
+        background: #f6f8fb;
+        font-family:
+          "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC",
+          "Helvetica Neue", Arial, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 42px;
+      }
+
+      .resume-section {
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+
+      .section-title {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 22px;
+        color: #1f57d8;
+        font-size: 24px;
+        font-weight: 800;
+      }
+
+      .section-title::after {
+        display: block;
+        height: 1px;
+        background: #9ba8bd;
+        content: "";
+      }
+
+      .project-card {
+        border: 1px solid #cfd9e8;
+        border-radius: 10px;
+        padding: 18px 20px 22px;
+        background: #ffffff;
+      }
+
+      .project-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      h2 {
+        margin: 0;
+        color: #192238;
+        font-size: 24px;
+        line-height: 1.32;
+      }
+
+      .date {
+        flex: 0 0 auto;
+        color: #4b5568;
+        font-size: 18px;
+        font-weight: 760;
+        white-space: nowrap;
+      }
+
+      .stack {
+        margin: 8px 0 12px;
+        color: #087b56;
+        font-size: 17px;
+        font-weight: 800;
+        line-height: 1.5;
+      }
+
+      .summary {
+        margin: 0 0 12px;
+        color: #384459;
+        font-size: 16px;
+        line-height: 1.72;
+      }
+
+      ul {
+        display: grid;
+        gap: 10px;
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      li {
+        color: #1f2a40;
+        font-size: 16px;
+        line-height: 1.65;
+      }
+
+      strong {
+        color: #1f57d8;
+      }
+
+      code {
+        border-radius: 4px;
+        padding: 1px 5px;
+        color: #155ab8;
+        background: #edf4ff;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.94em;
+      }
+
+      @media print {
+        body {
+          padding: 0;
+          background: #ffffff;
+        }
+
+        .project-card {
+          border-color: #c9d2df;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <section class="resume-section">
+      <div class="section-title">项目经历</div>
+
+      <article class="project-card">
+        <div class="project-head">
+          <h2>CareerPilot 实习求职 Agent 工作流平台</h2>
+          <div class="date">2026.07 - 至今</div>
+        </div>
+
+        <p class="stack">
+          技术栈：Python + FastAPI + React + TypeScript + Pydantic v2 + DeepSeek API +
+          ReportLab + Playwright(optional) + Run Trace
+        </p>
+
+        <p class="summary">
+          项目面向学生实习投递场景，构建从岗位收集、简历/JD 结构化解析、匹配评分、能力缺口分析、
+          证据锁定改写到人工审批导出的 AI Agent 流程平台，强调可追踪、可复盘、可审计，避免生成虚假经历。
+        </p>
+
+        <ul>
+          <li>
+            <strong>Agent 工作流与可观测性：</strong>基于 FastAPI 实现
+            <code>LoopEngine</code> 的 plan / execute / verify / reflect 流程，记录
+            <code>run</code>、<code>step</code>、<code>event</code>、<code>checkpoint</code>
+            和 LLM token/cost，支持人工审批、失败恢复和前端运行轨迹可视化。
+          </li>
+          <li>
+            <strong>结构化解析与岗位收集：</strong>接入 DeepSeek API 输出 Pydantic 结构化简历/JD，
+            内置 JSON 修复与本地 fallback；W6 增加 JobCollectorAgent，支持用户提供公开 URL / HTML /
+            文本，进行正文抽取、公开页面安全校验、正文 hash、HTML hash 和可选截图留证。
+          </li>
+          <li>
+            <strong>证据锁定匹配：</strong>实现 MatchAgent 对简历画像与 JD 画像进行要求匹配、关键词对齐、
+            证据映射和缺口分级，输出整体匹配分、缺失项、改写优先级，确保每条建议都能回溯到原始经历或岗位文本。
+          </li>
+          <li>
+            <strong>简历改写与 HITL 审批：</strong>实现 ResumeRewriteAgent，把匹配结果转成中文改写草稿、
+            Diff、风险提示和证据链；没有证据的内容仅进入风险清单，不写入正式经历，审批通过后使用
+            ReportLab 导出支持中文字体的 PDF。
+          </li>
+          <li>
+            <strong>产品化前端体验：</strong>使用 React + TypeScript 重构为面向用户的求职流程首页，
+            隐藏底层开发细节到开发者视图；实现玻璃拟态面板、滚动渐显、预加载、音乐联动粒子背景和模型处理动效，
+            使 Agent 的执行状态、成本、证据和审批过程直观可见。
+          </li>
+          <li>
+            <strong>安全边界与真实性约束：</strong>浏览器收集工具默认不携带 Cookie/登录态，不访问
+            localhost/私有网段，不绕过验证码或平台限制；简历改写遵循 evidence-locked generation，
+            适合在面试中演示 AI Agent 的工具调用、状态机、审计链路和人类审批设计。
+          </li>
+        </ul>
+      </article>
+    </section>
+  </body>
+</html>

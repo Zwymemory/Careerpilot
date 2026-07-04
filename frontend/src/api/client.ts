@@ -1,4 +1,5 @@
 import type {
+  JobCollectResponse,
   JobProfile,
   MatchProfile,
   MatchResponse,
@@ -63,6 +64,22 @@ export function parseJob(text: string): Promise<ParseJobResponse> {
     method: "POST",
     body: JSON.stringify({
       text,
+      user_id: "local-user"
+    })
+  });
+}
+
+export function collectJob(payload: {
+  url?: string;
+  html?: string;
+  text?: string;
+  source_name?: string;
+  capture_screenshot?: boolean;
+}): Promise<JobCollectResponse> {
+  return request<JobCollectResponse>("/api/job-collector", {
+    method: "POST",
+    body: JSON.stringify({
+      ...payload,
       user_id: "local-user"
     })
   });

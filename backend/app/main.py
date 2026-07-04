@@ -1,7 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health, loop_runs, matches, parsers, rewrite_drafts, runs
+from app.api.routes import (
+    health,
+    job_collector,
+    loop_runs,
+    matches,
+    parsers,
+    rewrite_drafts,
+    runs,
+)
 from app.core.config import get_settings
 
 
@@ -13,7 +21,7 @@ def create_app() -> FastAPI:
         description=(
             "CareerPilot API: run trace, cost tracking, LLM client boundary, "
             "structured Resume/JD parsing, Week3 LoopEngine, Week4 MatchAgent, "
-            "and Week5 ResumeRewriteAgent."
+            "Week5 ResumeRewriteAgent, and Week6 JobCollector browser boundary."
         ),
     )
 
@@ -26,6 +34,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health.router, prefix="/api")
+    app.include_router(job_collector.router, prefix="/api")
     app.include_router(loop_runs.router, prefix="/api")
     app.include_router(matches.router, prefix="/api")
     app.include_router(parsers.router, prefix="/api")

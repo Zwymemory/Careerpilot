@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   approveLoopRun,
   approveRewriteDraft,
+  collectJob,
   createLoopRun,
   createMatch,
   createRewriteDraft,
@@ -16,6 +17,7 @@ import {
 } from "./api/client";
 import { RunTrace } from "./components/RunTrace";
 import type {
+  JobCollectResponse,
   MatchResponse,
   ParseJobResponse,
   ParseResumeResponse,
@@ -34,6 +36,7 @@ const defaultJobText =
 type WorkflowAction =
   | "resume-parser"
   | "job-parser"
+  | "job-collector"
   | "intake-analysis"
   | "match-agent"
   | "rewrite-draft"
@@ -66,8 +69,10 @@ export default function App() {
   const [activeRun, setActiveRun] = useState<RunDetail | null>(null);
   const [resumeText, setResumeText] = useState(defaultResumeText);
   const [jobText, setJobText] = useState(defaultJobText);
+  const [jobUrl, setJobUrl] = useState("");
   const [resumeResult, setResumeResult] = useState<ParseResumeResponse | null>(null);
   const [jobResult, setJobResult] = useState<ParseJobResponse | null>(null);
+  const [jobCollectResult, setJobCollectResult] = useState<JobCollectResponse | null>(null);
   const [matchResult, setMatchResult] = useState<MatchResponse | null>(null);
   const [rewriteResult, setRewriteResult] = useState<ResumeRewriteResponse | null>(null);
   const [workflowAction, setWorkflowAction] = useState<WorkflowAction | null>(null);
@@ -638,6 +643,7 @@ export default function App() {
     try {
       const result = await parseJob(text);
       setJobResult(result);
+      setJobCollectResult(null);
       setMatchResult(null);
       setRewriteResult(null);
       await showRun(result.run_id);
@@ -650,14 +656,62 @@ export default function App() {
     }
   }
 
-  async function handleAnalyzeIntake() {
-    const resume = resumeText.trim();
-    const job = jobText.trim();
+  async function handleCollectJob() {
+    const url = jobUrl.trim();
+    const text = jobText.trim();
     if (workflowAction) {
       return;
     }
-    if (resume.length < 10 || job.length < 10) {
-      setWorkflowError("请先补充真实经历和目标岗位 JD，每段至少 10 个字符。");
+    if (!url && text.length < 10) {
+      setWorkflowError("请填写岗位链接，或粘贴至少 10 个字符的岗位 JD。");
+      return;
+    }
+
+    setWorkflowAction("job-collector");
+    setWorkflowError(null);
+    clearCompletionPulse();
+    try {
+      const result = await collectJob(
+        url
+          ? {
+              url,
+              source_name: "frontend-job-url",
+              capture_screenshot: true
+            }
+          : {
+              text,
+              source_name: "frontend-jd",
+              capture_screenshot: false
+            },
+      );
+      setJobCollectResult(result);
+      setJobText(result.snapshot.text);
+      setJobResult({
+        run_id: result.run_id,
+        profile: result.profile,
+        metadata: result.metadata
+      });
+      setMatchResult(null);
+      setRewriteResult(null);
+      await showRun(result.run_id);
+      await refreshRuns();
+      markRequestComplete();
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "岗位收集失败。");
+    } finally {
+      setWorkflowAction(null);
+    }
+  }
+
+  async function handleAnalyzeIntake() {
+    const resume = resumeText.trim();
+    const job = jobText.trim();
+    const url = jobUrl.trim();
+    if (workflowAction) {
+      return;
+    }
+    if (resume.length < 10 || (!url && job.length < 10)) {
+      setWorkflowError("请先补充真实经历，并填写岗位链接或目标岗位 JD。");
       return;
     }
 
@@ -667,10 +721,27 @@ export default function App() {
     try {
       const [parsedResume, parsedJob] = await Promise.all([
         parseResume(resume),
-        parseJob(job)
+        url
+          ? collectJob({
+              url,
+              source_name: "frontend-job-url",
+              capture_screenshot: true
+            })
+          : parseJob(job)
       ]);
       setResumeResult(parsedResume);
-      setJobResult(parsedJob);
+      if (isJobCollectResponse(parsedJob)) {
+        setJobCollectResult(parsedJob);
+        setJobText(parsedJob.snapshot.text);
+        setJobResult({
+          run_id: parsedJob.run_id,
+          profile: parsedJob.profile,
+          metadata: parsedJob.metadata
+        });
+      } else {
+        setJobCollectResult(null);
+        setJobResult(parsedJob);
+      }
       setMatchResult(null);
       setRewriteResult(null);
       await showRun(parsedJob.run_id);
@@ -1137,9 +1208,9 @@ export default function App() {
             />
             <ProductStep
               index="02"
-              title="粘贴目标 JD"
-              text="系统解析硬性要求、加分项、职责和隐藏关键词。"
-              active={Boolean(jobResult)}
+              title="收集目标 JD"
+              text="可粘贴 JD，也可输入公开岗位链接；系统会留下正文哈希、截图状态和安全记录。"
+              active={Boolean(jobCollectResult || jobResult)}
             />
             <ProductStep
               index="03"
@@ -1165,6 +1236,26 @@ export default function App() {
               </div>
               <span className="state-badge">真实证据</span>
             </div>
+            <div className="collector-strip">
+              <label className="collector-field">
+                <span>岗位链接 / 公开 JD 页面</span>
+                <input
+                  type="url"
+                  value={jobUrl}
+                  onChange={(event) => setJobUrl(event.target.value)}
+                  placeholder="https://example.com/job/ai-agent-intern"
+                />
+              </label>
+              <button
+                className="ghost-action liftable"
+                type="button"
+                onClick={handleCollectJob}
+                disabled={workflowAction !== null || (!jobUrl.trim() && jobText.trim().length < 10)}
+              >
+                {workflowAction === "job-collector" ? "收集中" : "收集岗位"}
+              </button>
+            </div>
+            {jobCollectResult ? <JobCollectorSummary result={jobCollectResult} /> : null}
             <div className="workflow-input-grid">
               <label className="workflow-field">
                 <span>我的真实经历 / 能力</span>
@@ -1290,9 +1381,49 @@ export default function App() {
         <details className="developer-view glass-surface revealable">
           <summary>
             <span>开发者视图</span>
-            <strong>查看 Week2-5 Agent 运行细节、审批和 checkpoint</strong>
+            <strong>查看 Week2-6 Agent 运行细节、审批和 checkpoint</strong>
           </summary>
           <section className="workflow-board developer-workflow">
+            <section className="workflow-panel workflow-panel-wide scroll-fade glass-surface liftable">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Week6 JobCollectorAgent</p>
+                  <h2>公开岗位收集 · 安全边界 · 留证</h2>
+                </div>
+                <span className="state-badge">W6</span>
+              </div>
+              <div className="collector-dev-grid">
+                <div className="match-side">
+                  <p>
+                    W6 只收集你提供的公开岗位页面或粘贴文本，不携带登录态，不绕过验证码，
+                    并为正文、HTML 和截图生成 hash，作为后续匹配与改写的证据来源。
+                  </p>
+                  <div className="collector-strip collector-strip-compact">
+                    <label className="collector-field">
+                      <span>岗位链接</span>
+                      <input
+                        type="url"
+                        value={jobUrl}
+                        onChange={(event) => setJobUrl(event.target.value)}
+                        placeholder="粘贴公开岗位 URL"
+                      />
+                    </label>
+                    <button
+                      className="primary-action liftable"
+                      type="button"
+                      onClick={handleCollectJob}
+                      disabled={
+                        workflowAction !== null || (!jobUrl.trim() && jobText.trim().length < 10)
+                      }
+                    >
+                      {workflowAction === "job-collector" ? "收集中" : "运行收集"}
+                    </button>
+                  </div>
+                </div>
+                <JobCollectorSummary result={jobCollectResult} />
+              </div>
+            </section>
+
             <section className="workflow-panel scroll-fade glass-surface liftable">
               <div className="section-heading">
                 <div>
@@ -1580,6 +1711,59 @@ function ParserSummary({
   );
 }
 
+function JobCollectorSummary({ result }: { result: JobCollectResponse | null }) {
+  if (!result) {
+    return (
+      <article className="collector-summary collector-summary-empty">
+        <p className="eyebrow">岗位收集证据</p>
+        <h3>等待 W6 收集公开岗位。</h3>
+        <p>公开链接、粘贴文本、正文 hash、截图状态和安全边界会显示在这里。</p>
+      </article>
+    );
+  }
+
+  const { snapshot } = result;
+  const warnings = snapshot.safety.warnings;
+  const evidenceItems = [
+    ["来源", formatCollectorSource(snapshot.source_type)],
+    ["正文 Hash", snapshot.text_hash.slice(0, 12)],
+    ["HTML Hash", snapshot.html_hash ? snapshot.html_hash.slice(0, 12) : "未保存"],
+    ["截图", formatScreenshotStatus(snapshot.screenshot_status)]
+  ];
+
+  return (
+    <article className="collector-summary liftable">
+      <div className="collector-summary-head">
+        <div>
+          <p className="eyebrow">岗位收集证据</p>
+          <h3>{snapshot.title || snapshot.source_name || "已收集岗位正文"}</h3>
+          {snapshot.source_url ? <p>{snapshot.source_url}</p> : null}
+        </div>
+        <span className={snapshot.safety.allowed ? "safety-pill safety-ok" : "safety-pill"}>
+          {snapshot.safety.allowed ? "安全通过" : "已阻断"}
+        </span>
+      </div>
+      <div className="collector-evidence-grid">
+        {evidenceItems.map(([label, value]) => (
+          <div key={label}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="collector-preview">
+        <span>正文预览</span>
+        <p>{snapshot.text.slice(0, 220)}{snapshot.text.length > 220 ? "..." : ""}</p>
+      </div>
+      <div className="safety-list">
+        {(warnings.length ? warnings : snapshot.safety.rules.slice(0, 3)).map((item) => (
+          <span key={item}>{item}</span>
+        ))}
+      </div>
+    </article>
+  );
+}
+
 function WorkflowStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="workflow-stat">
@@ -1787,6 +1971,12 @@ function formatState(state: string): string {
   return labels[state] ?? titleizeToken(state);
 }
 
+function isJobCollectResponse(
+  value: ParseJobResponse | JobCollectResponse,
+): value is JobCollectResponse {
+  return "snapshot" in value;
+}
+
 function formatSource(source: string): string {
   const labels: Record<string, string> = {
     heuristic_dry_run: "本地规则解析",
@@ -1796,6 +1986,24 @@ function formatSource(source: string): string {
     manual: "手动输入"
   };
   return labels[source] ?? titleizeToken(source);
+}
+
+function formatCollectorSource(source: string): string {
+  const labels: Record<string, string> = {
+    url: "公开链接",
+    html: "HTML 片段",
+    text: "粘贴文本"
+  };
+  return labels[source] ?? titleizeToken(source);
+}
+
+function formatScreenshotStatus(status: string): string {
+  const labels: Record<string, string> = {
+    captured: "已截图",
+    skipped: "未请求",
+    unavailable: "不可用"
+  };
+  return labels[status] ?? titleizeToken(status);
 }
 
 function formatSeverity(severity: string): string {

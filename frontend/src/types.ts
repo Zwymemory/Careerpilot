@@ -175,6 +175,35 @@ export interface ParseJobResponse {
   metadata: ParseMetadata;
 }
 
+export interface BrowserSafetyReport {
+  allowed: boolean;
+  rules: string[];
+  warnings: string[];
+  blocked_reason: string | null;
+}
+
+export interface JobSnapshot {
+  source_type: "url" | "html" | "text";
+  source_url: string | null;
+  source_name: string | null;
+  title: string | null;
+  text: string;
+  text_hash: string;
+  html_hash: string | null;
+  screenshot_path: string | null;
+  screenshot_hash: string | null;
+  screenshot_status: "captured" | "skipped" | "unavailable";
+  captured_at: string;
+  safety: BrowserSafetyReport;
+}
+
+export interface JobCollectResponse {
+  run_id: string;
+  snapshot: JobSnapshot;
+  profile: JobProfile;
+  metadata: ParseMetadata;
+}
+
 export interface MatchEvidence {
   requirement: string;
   matched_resume_items: string[];
