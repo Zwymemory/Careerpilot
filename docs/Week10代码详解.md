@@ -11,6 +11,7 @@ Week10 的目标不是再增加一个求职功能，而是把前面 W1-W9 的 Ag
 - 生产就绪检查；
 - LLM/Judge 成本汇总；
 - OpenAI-compatible LLM-as-Judge 配置；
+- Tavily 联网研究配置；
 - W10 smoke demo 脚本；
 - 项目简历定位文档。
 
@@ -52,6 +53,10 @@ judge_model: str = "gpt-4.1-mini"
 judge_base_url: str = "https://api.openai.com/v1"
 judge_api_key: str | None = None
 
+tavily_dry_run: bool = True
+tavily_base_url: str = "https://api.tavily.com"
+tavily_api_key: str | None = None
+
 api_access_token: str | None = None
 rate_limit_requests_per_minute: int = 180
 security_headers_enabled: bool = True
@@ -60,9 +65,12 @@ security_headers_enabled: bool = True
 含义：
 
 - `judge_*`：给 W9 QualityGate 的真实 LLM-as-Judge 使用；
+- `tavily_*`：给联网岗位研究、公司背景补充和面试题参考使用；
 - `api_access_token`：本地为空，部署或公开演示时开启；
 - `rate_limit_requests_per_minute`：每个客户端每分钟最多请求数；
 - `security_headers_enabled`：是否加基础安全响应头。
+
+Tavily 在 CareerPilot 里不是“替用户编经历”的来源。它只用于岗位、公司、面试题风格等外部背景参考。候选人简历内容仍然必须来自 W2 解析出的真实简历证据。
 
 ### `.env` 与 `.env.example`
 

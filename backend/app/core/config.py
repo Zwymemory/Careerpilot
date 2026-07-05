@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     judge_base_url: str = "https://api.openai.com/v1"
     judge_api_key: str | None = None
 
+    tavily_dry_run: bool = True
+    tavily_base_url: str = "https://api.tavily.com"
+    tavily_api_key: str | None = None
+    tavily_timeout_seconds: float = 20
+    tavily_max_results: int = 5
+    tavily_search_depth: str = "basic"
+
     api_access_token: str | None = None
     rate_limit_requests_per_minute: int = 180
     security_headers_enabled: bool = True

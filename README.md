@@ -20,6 +20,7 @@ complete the end-to-end job-search Agent workflow:
 - ResumeRewriteAgent with diff suggestions, evidence links, risk warnings, approval, and PDF export
 - JobCollectorAgent with public-source safety checks, text/html/url collection, hashes, and optional screenshots
 - InterviewCoachAgent with realistic project questions, answer frameworks, and evidence warnings
+- Tavily-backed web research tool for company/JD context and interview-question references
 - ApplicationCRMAgent with application memory, next tasks, feedback, and status tracking
 - EvalHarness with QualityGate, HTML reports, optional LLM-as-Judge, and cost recording
 - Week10 production guard with optional API token auth, rate limiting, security headers, readiness, cost summary, Docker Compose, and demo script
@@ -88,12 +89,18 @@ JUDGE_PROVIDER=openai
 JUDGE_MODEL=gpt-4.1-mini
 JUDGE_BASE_URL=https://api.openai.com/v1
 JUDGE_API_KEY=
+
+TAVILY_DRY_RUN=true
+TAVILY_BASE_URL=https://api.tavily.com
+TAVILY_API_KEY=
 ```
 
 - Leave `API_ACCESS_TOKEN` empty for local development. Set it in shared/demo deployments.
 - Use `Authorization: Bearer <token>` or `X-API-Key: <token>` when auth is enabled.
 - `JUDGE_DRY_RUN=true` keeps QualityGate deterministic. Set it to `false` only when a real
   OpenAI-compatible judge key is configured.
+- `TAVILY_DRY_RUN=true` keeps web research deterministic. Set it to `false` only when a real
+  Tavily API key is configured in local `backend/.env` or deployment secrets.
 
 ## API Demo
 
@@ -194,6 +201,20 @@ curl -X POST http://localhost:8000/api/matches \
       "inferred_fields": [],
       "needs_confirmation": []
     }
+  }'
+```
+
+Search public web context with Tavily:
+
+```bash
+curl -X POST http://localhost:8000/api/research/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "local-user",
+    "query": "AI Agent 全栈开发实习生 FastAPI React 面试题",
+    "search_depth": "basic",
+    "max_results": 5,
+    "include_answer": true
   }'
 ```
 

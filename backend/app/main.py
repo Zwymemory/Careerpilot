@@ -11,6 +11,7 @@ from app.api.routes import (
     matches,
     parsers,
     production,
+    research,
     rewrite_drafts,
     runs,
 )
@@ -28,7 +29,8 @@ def create_app() -> FastAPI:
             "structured Resume/JD parsing, Week3 LoopEngine, Week4 MatchAgent, "
             "Week5 ResumeRewriteAgent, Week6 JobCollector browser boundary, "
             "Week7 InterviewCoachAgent, Week8 Application CRM memory, "
-            "Week9 Eval Harness QualityGate, and Week10 production polish."
+            "Week9 Eval Harness QualityGate, Week10 production polish, "
+            "and Tavily-backed web research tools."
         ),
     )
 
@@ -53,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(matches.router, prefix="/api")
     app.include_router(parsers.router, prefix="/api")
     app.include_router(production.router, prefix="/api")
+    app.include_router(research.router, prefix="/api")
     app.include_router(rewrite_drafts.router, prefix="/api")
     app.include_router(runs.router, prefix="/api")
     return app

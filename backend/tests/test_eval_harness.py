@@ -28,6 +28,8 @@ def client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("LLM_API_KEY", "")
     monkeypatch.setenv("JUDGE_DRY_RUN", "true")
     monkeypatch.setenv("JUDGE_API_KEY", "")
+    monkeypatch.setenv("TAVILY_DRY_RUN", "true")
+    monkeypatch.setenv("TAVILY_API_KEY", "")
     monkeypatch.setenv("API_ACCESS_TOKEN", "")
     monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "0")
     application_store.clear()
@@ -168,6 +170,7 @@ def test_production_readiness_and_cost_summary(client: TestClient) -> None:
     readiness = client.get("/api/production/readiness")
     assert readiness.status_code == 200
     assert readiness.json()["auth_enabled"] is False
+    assert readiness.json()["tavily_configured"] is False
 
     response = client.post("/api/evals", json=_eval_payload())
     assert response.status_code == 201
@@ -184,6 +187,8 @@ def test_api_access_token_protects_non_health_routes(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("LLM_API_KEY", "")
     monkeypatch.setenv("JUDGE_DRY_RUN", "true")
     monkeypatch.setenv("JUDGE_API_KEY", "")
+    monkeypatch.setenv("TAVILY_DRY_RUN", "true")
+    monkeypatch.setenv("TAVILY_API_KEY", "")
     monkeypatch.setenv("API_ACCESS_TOKEN", "test-token")
     monkeypatch.setenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "0")
     get_settings.cache_clear()

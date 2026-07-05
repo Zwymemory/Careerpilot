@@ -16,9 +16,11 @@ from app.schemas.llm import ChatMessage, LLMRequest, LLMResponse
 from app.schemas.matching import MatchProfile
 from app.schemas.parser import EvidenceItem, JobProfile, ResumeProfile, ResumeProject
 from app.schemas.rewrite import ResumeRewriteDraft
+from app.schemas.web_search import WebSearchRequest
 from app.services.json_repair import JSONRepairError, repair_json_object
 from app.services.llm_client import LLMClient, LLMClientError
 from app.services.run_store import new_id
+from app.services.tavily_client import TavilyClient
 
 
 class InterviewCoachAgent:
@@ -72,6 +74,12 @@ class InterviewCoachAgent:
             return pack, None, ["llm_interview_refinement_skipped_dry_run"]
 
         response: LLMResponse | None = None
+        web_references, reference_issues = await _interview_reference_search(
+            settings,
+            resume,
+            job,
+            match,
+        )
         try:
             response = await LLMClient(settings).chat(
                 LLMRequest(
@@ -80,7 +88,14 @@ class InterviewCoachAgent:
                         ChatMessage(
                             role="user",
                             content=json.dumps(
-                                _interview_prompt_payload(resume, job, match, rewrite, pack),
+                                _interview_prompt_payload(
+                                    resume,
+                                    job,
+                                    match,
+                                    rewrite,
+                                    pack,
+                                    web_references,
+                                ),
                                 ensure_ascii=False,
                             ),
                         ),
@@ -92,7 +107,10 @@ class InterviewCoachAgent:
             )
             repaired = repair_json_object(response.content)
             pack = _apply_llm_interview_refinement(pack, repaired.data, resume, job, match)
-            issues = [f"llm_interview_refinement:{issue}" for issue in repaired.issues]
+            issues = [
+                *reference_issues,
+                *[f"llm_interview_refinement:{issue}" for issue in repaired.issues],
+            ]
             return pack, response, issues
         except (JSONRepairError, LLMClientError, ValidationError, KeyError, ValueError) as exc:
             pack.evidence_warnings = _unique(
@@ -514,6 +532,8 @@ def _interview_system_prompt() -> str:
         "Questions should sound like real interviewers: project difficulty, debugging, "
         "tradeoffs, API/data-flow design, validation, failure handling, team boundary, "
         "and what the candidate would improve. Avoid wording like 'how do you satisfy X'. "
+        "If web_reference_results are provided, use them only to improve interview style "
+        "and topic realism; never treat them as candidate resume evidence. "
         "Never invent experience, metrics, employers, production scale, or unsupported skills. "
         "If evidence is missing, ask about boundary and learning plan. "
         "Do not use the word STAR in user-facing text; use project answer framework language. "
@@ -532,12 +552,14 @@ def _interview_prompt_payload(
     match: MatchProfile | None,
     rewrite: ResumeRewriteDraft | None,
     pack: InterviewPack,
+    web_references: list[dict] | None = None,
 ) -> dict:
     return {
         "resume_profile": resume.model_dump(mode="json"),
         "job_profile": job.model_dump(mode="json"),
         "match_profile": match.model_dump(mode="json") if match else None,
         "rewrite_draft": rewrite.model_dump(mode="json") if rewrite else None,
+        "web_reference_results": web_references or [],
         "local_pack_seed": {
             "target_keywords": pack.target_keywords,
             "predicted_questions": [
@@ -558,6 +580,71 @@ def _interview_prompt_payload(
             ],
         },
     }
+
+
+async def _interview_reference_search(
+    settings: Settings,
+    resume: ResumeProfile,
+    job: JobProfile,
+    match: MatchProfile | None,
+) -> tuple[list[dict], list[str]]:
+    if settings.tavily_dry_run or not settings.tavily_api_key:
+        return [], ["tavily_reference_skipped_dry_run"]
+
+    query = _interview_reference_query(resume, job, match)
+    depth = "advanced" if settings.tavily_search_depth == "advanced" else "basic"
+    try:
+        response = await TavilyClient(settings).search(
+            WebSearchRequest(
+                query=query,
+                search_depth=depth,
+                max_results=max(1, min(settings.tavily_max_results, 5)),
+                include_answer=True,
+                include_raw_content=False,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 - optional reference search must degrade.
+        return [], [f"tavily_reference_fallback:{exc}"]
+
+    references: list[dict] = []
+    if response.answer:
+        references.append({"title": "Tavily answer", "content": response.answer[:700]})
+    for result in response.results[:5]:
+        references.append(
+            {
+                "title": result.title,
+                "url": str(result.url),
+                "content": result.content[:700],
+                "score": result.score,
+            }
+        )
+    return references[:6], [f"tavily_reference_results:{len(response.results)}"]
+
+
+def _interview_reference_query(
+    resume: ResumeProfile,
+    job: JobProfile,
+    match: MatchProfile | None,
+) -> str:
+    role = job.title or "AI Agent 实习"
+    company = job.company or ""
+    keywords = _unique(
+        [
+            *job.hard_requirements,
+            *job.nice_to_have,
+            *job.tech_keywords,
+            *(match.missing_keywords if match else []),
+            *resume.keywords,
+        ]
+    )[:8]
+    return " ".join(
+        [
+            company,
+            role,
+            "中文 技术面试 项目追问 真实面试题",
+            *keywords,
+        ]
+    ).strip()
 
 
 def _apply_llm_interview_refinement(

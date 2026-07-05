@@ -13,6 +13,7 @@ class ReadinessReport(BaseModel):
     environment: str
     llm_configured: bool
     judge_configured: bool
+    tavily_configured: bool
     auth_enabled: bool
     rate_limit_requests_per_minute: int
 
@@ -25,6 +26,7 @@ async def readiness() -> ReadinessReport:
         environment=settings.environment,
         llm_configured=bool(settings.llm_api_key) and not settings.llm_dry_run,
         judge_configured=bool(settings.judge_api_key) and not settings.judge_dry_run,
+        tavily_configured=bool(settings.tavily_api_key) and not settings.tavily_dry_run,
         auth_enabled=bool(settings.api_access_token),
         rate_limit_requests_per_minute=settings.rate_limit_requests_per_minute,
     )

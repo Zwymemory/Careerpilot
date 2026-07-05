@@ -22,6 +22,8 @@ from app.services.run_store import run_store
 def client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("LLM_DRY_RUN", "true")
     monkeypatch.setenv("LLM_API_KEY", "")
+    monkeypatch.setenv("TAVILY_DRY_RUN", "true")
+    monkeypatch.setenv("TAVILY_API_KEY", "")
     get_settings.cache_clear()
     with TestClient(create_app()) as test_client:
         yield test_client

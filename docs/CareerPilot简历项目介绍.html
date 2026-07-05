@@ -139,7 +139,7 @@
 
         <p class="stack">
           技术栈：Python + FastAPI + React + TypeScript + Pydantic v2 + DeepSeek API +
-          OpenAI-compatible API + ReportLab + Playwright(optional) + Docker Compose + Run Trace
+          OpenAI-compatible API + Tavily Search API + ReportLab + Playwright(optional) + Docker Compose + Run Trace
         </p>
 
         <p class="summary">
@@ -167,6 +167,11 @@
             <strong>简历改写与 HITL 审批：</strong>实现 ResumeRewriteAgent，把匹配结果转成中文改写草稿、
             Diff、风险提示和证据链；没有证据的内容仅进入风险清单，不写入正式经历，审批通过后使用
             ReportLab 导出支持中文字体的 PDF。
+          </li>
+          <li>
+            <strong>联网研究与面试准备：</strong>接入 Tavily Search API 作为 ResearchAgent 工具，
+            为岗位背景、公司信息和真实面试题风格提供参考；InterviewCoachAgent 结合 JD、匹配缺口、
+            项目证据和外部资料生成项目追问、回答框架与复习清单。
           </li>
           <li>
             <strong>产品化前端体验：</strong>使用 React + TypeScript 重构为面向用户的求职流程首页，
