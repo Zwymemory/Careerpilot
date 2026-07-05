@@ -13,6 +13,7 @@ import type {
   MatchResponse,
   ParseJobResponse,
   ParseResumeResponse,
+  ProviderBalanceResponse,
   ResumeRewriteResponse,
   ResumeProfile,
   RunDetail,
@@ -231,6 +232,10 @@ export function updateApplicationStatus(
 
 export function listEvalReports(userId = "local-user"): Promise<EvalReportSummary[]> {
   return request<EvalReportSummary[]>(`/api/evals?user_id=${encodeURIComponent(userId)}`);
+}
+
+export function getProviderBalances(): Promise<ProviderBalanceResponse> {
+  return request<ProviderBalanceResponse>("/api/provider-balances");
 }
 
 export function createEvalReport(payload: {

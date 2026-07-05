@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     tavily_max_results: int = 5
     tavily_search_depth: str = "basic"
 
+    balance_deepseek_budget_cny: float = 50
+    balance_openai_budget_usd: float = 5
+    balance_tavily_monthly_credits: int = 1000
+    balance_deepseek_avg_call_cost_cny: float = 0.002
+    balance_openai_avg_call_cost_usd: float = 0.01
+    balance_tavily_avg_call_credits: float = 1
+    balance_usd_to_cny: float = 7.2
+
     api_access_token: str | None = None
     rate_limit_requests_per_minute: int = 180
     security_headers_enabled: bool = True

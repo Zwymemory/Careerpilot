@@ -500,3 +500,28 @@ export interface EvalRunResponse {
   run_id: string;
   report: EvalReport;
 }
+
+export type ProviderBalanceStatus = "ok" | "warn" | "error" | "unknown";
+
+export interface ProviderBalance {
+  provider: string;
+  label: string;
+  configured: boolean;
+  live: boolean;
+  status: ProviderBalanceStatus;
+  percent_remaining: number;
+  estimated_calls_remaining: number | null;
+  balance_label: string;
+  remaining_label: string;
+  unit_label: string;
+  source: string;
+  issues: string[];
+  updated_at: string;
+}
+
+export interface ProviderBalanceResponse {
+  generated_at: string;
+  summary: string;
+  providers: ProviderBalance[];
+  docs: Record<string, string>;
+}

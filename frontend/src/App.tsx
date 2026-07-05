@@ -15,6 +15,7 @@ import {
   evalReportHtmlUrl,
   exportRewritePdf,
   getRun,
+  getProviderBalances,
   listApplications,
   listEvalReports,
   listRuns,
@@ -35,6 +36,8 @@ import type {
   MatchResponse,
   ParseJobResponse,
   ParseResumeResponse,
+  ProviderBalance,
+  ProviderBalanceResponse,
   ResumeRewriteResponse,
   RunDetail,
   RunSummary
@@ -123,8 +126,14 @@ export default function App() {
   const [audioName, setAudioName] = useState("未选择音乐");
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMusicDockOpen, setIsMusicDockOpen] = useState(false);
+  const [balanceResult, setBalanceResult] = useState<ProviderBalanceResponse | null>(null);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [isBalanceDockOpen, setIsBalanceDockOpen] = useState(false);
+  const [isDemoDockOpen, setIsDemoDockOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const musicDockRef = useRef<HTMLElement | null>(null);
+  const balanceDockRef = useRef<HTMLElement | null>(null);
+  const demoDockRef = useRef<HTMLDivElement | null>(null);
   const musicDockPointerInsideRef = useRef(false);
   const heroCopyRef = useRef<HTMLDivElement | null>(null);
   const goalInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -154,6 +163,12 @@ export default function App() {
   async function refreshEvalReports() {
     const data = await listEvalReports();
     setEvalReports(data);
+  }
+
+  async function refreshProviderBalances() {
+    const data = await getProviderBalances();
+    setBalanceResult(data);
+    setBalanceError(null);
   }
 
   async function showRun(runId: string) {
@@ -202,6 +217,19 @@ export default function App() {
     refreshEvalReports().catch((err: unknown) => {
       setWorkflowError(err instanceof Error ? err.message : "评测报告加载失败。");
     });
+    refreshProviderBalances().catch((err: unknown) => {
+      setBalanceError(err instanceof Error ? err.message : "模型余额加载失败。");
+    });
+  }, []);
+
+  useEffect(() => {
+    const refreshTimer = window.setInterval(() => {
+      refreshProviderBalances().catch((err: unknown) => {
+        setBalanceError(err instanceof Error ? err.message : "模型余额加载失败。");
+      });
+    }, 90000);
+
+    return () => window.clearInterval(refreshTimer);
   }, []);
 
   useEffect(() => {
@@ -349,6 +377,40 @@ export default function App() {
     window.addEventListener("pointerdown", handlePointerDown, { capture: true });
     return () => window.removeEventListener("pointerdown", handlePointerDown, { capture: true });
   }, [isMusicDockOpen]);
+
+  useEffect(() => {
+    if (!isBalanceDockOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && balanceDockRef.current?.contains(target)) {
+        return;
+      }
+      setIsBalanceDockOpen(false);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, { capture: true });
+    return () => window.removeEventListener("pointerdown", handlePointerDown, { capture: true });
+  }, [isBalanceDockOpen]);
+
+  useEffect(() => {
+    if (!isDemoDockOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && demoDockRef.current?.contains(target)) {
+        return;
+      }
+      setIsDemoDockOpen(false);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, { capture: true });
+    return () => window.removeEventListener("pointerdown", handlePointerDown, { capture: true });
+  }, [isDemoDockOpen]);
 
   useEffect(() => {
     const canvas = flowCanvasRef.current;
@@ -1250,6 +1312,7 @@ export default function App() {
     activeRun?.run.run_id === rewriteResult.run_id &&
     activeRun.run.state === "COMPLETED";
   const isModelWorking = isLoading || workflowAction !== null;
+  const providerBalances = balanceResult?.providers ?? [];
 
   return (
     <div
@@ -1359,6 +1422,88 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      <aside
+        ref={balanceDockRef}
+        className={`provider-dock glass-surface ${
+          isBalanceDockOpen ? "balance-open" : "balance-closed"
+        }`}
+        aria-label="模型余额"
+      >
+        <button
+          className="provider-collapsed"
+          type="button"
+          onClick={() => setIsBalanceDockOpen(true)}
+          aria-label="打开模型余额"
+          aria-expanded={isBalanceDockOpen}
+        >
+          <span className="provider-orb">API</span>
+        </button>
+        <div className="provider-expanded" aria-hidden={!isBalanceDockOpen}>
+          <div className="provider-heading">
+            <div>
+              <p className="eyebrow">模型余额</p>
+              <h2>调用水位</h2>
+            </div>
+            <button
+              className="provider-refresh"
+              type="button"
+              onClick={() => {
+                refreshProviderBalances().catch((err: unknown) => {
+                  setBalanceError(err instanceof Error ? err.message : "模型余额加载失败。");
+                });
+              }}
+            >
+              刷新
+            </button>
+          </div>
+          <div className="quota-grid">
+            {providerBalances.length > 0 ? (
+              providerBalances.map((provider) => (
+                <ProviderQuota provider={provider} key={provider.provider} />
+              ))
+            ) : (
+              <p className="provider-loading">正在同步 API 余额...</p>
+            )}
+          </div>
+          <p className={balanceError ? "provider-error" : "provider-summary"}>
+            {balanceError ?? "悬停卡片查看余额来源。"}
+          </p>
+        </div>
+      </aside>
+
+      <div
+        ref={demoDockRef}
+        className={`demo-dock glass-surface ${isDemoDockOpen ? "demo-open" : "demo-closed"}`}
+        aria-label="Demo"
+      >
+        <button
+          className="demo-trigger"
+          type="button"
+          onClick={() => setIsDemoDockOpen(true)}
+          aria-label="打开 Demo"
+          aria-expanded={isDemoDockOpen}
+        >
+          <span aria-hidden="true">Demo</span>
+        </button>
+        <div className="demo-expanded" aria-hidden={!isDemoDockOpen}>
+          <div className="demo-heading">
+            <div>
+              <p className="eyebrow">Demo</p>
+              <h3>三分钟看完整求职链路</h3>
+            </div>
+            <button type="button" onClick={() => setIsDemoDockOpen(false)} aria-label="收起演示">
+              ×
+            </button>
+          </div>
+          <div className="demo-frame">
+            <video className="demo-video" controls preload="metadata" src="/careerpilot-demo.mp4" />
+            <p className="demo-hint">
+              将演示视频放到 frontend/public/careerpilot-demo.mp4 后，这里会自动播放。
+            </p>
+          </div>
+        </div>
+      </div>
 
       <main className="app-shell">
         <section className="hero-workspace">
@@ -2193,6 +2338,34 @@ function Metric({ label, value }: { label: string; value: string }) {
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function ProviderQuota({ provider }: { provider: ProviderBalance }) {
+  const percent = Math.max(0, Math.min(100, provider.percent_remaining));
+  return (
+    <article
+      className={`quota-card quota-${provider.status}`}
+      title={`${provider.balance_label} · ${provider.unit_label}`}
+      style={
+        {
+          "--quota-level": `${percent}%`,
+          "--quota-fill": `${100 - percent}%`
+        } as React.CSSProperties
+      }
+    >
+      <div className="quota-copy">
+        <span>{provider.live ? "实时" : provider.configured ? "估算" : "未启用"}</span>
+        <strong>{provider.label}</strong>
+        <p>{provider.remaining_label}</p>
+      </div>
+      <div className="quota-meter" aria-label={`${provider.label} 剩余 ${percent.toFixed(0)}%`}>
+        <span className="quota-water">
+          <i />
+        </span>
+        <b>{Math.round(percent)}%</b>
+      </div>
+    </article>
   );
 }
 

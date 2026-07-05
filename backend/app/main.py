@@ -11,6 +11,7 @@ from app.api.routes import (
     matches,
     parsers,
     production,
+    provider_balances,
     research,
     rewrite_drafts,
     runs,
@@ -55,6 +56,7 @@ def create_app() -> FastAPI:
     app.include_router(matches.router, prefix="/api")
     app.include_router(parsers.router, prefix="/api")
     app.include_router(production.router, prefix="/api")
+    app.include_router(provider_balances.router, prefix="/api")
     app.include_router(research.router, prefix="/api")
     app.include_router(rewrite_drafts.router, prefix="/api")
     app.include_router(runs.router, prefix="/api")
