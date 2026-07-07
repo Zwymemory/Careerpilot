@@ -15,6 +15,7 @@ from app.api.routes import (
     research,
     rewrite_drafts,
     runs,
+    text_extraction,
 )
 from app.core.config import get_settings
 from app.services.production_guard import production_guard_middleware
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(research.router, prefix="/api")
     app.include_router(rewrite_drafts.router, prefix="/api")
     app.include_router(runs.router, prefix="/api")
+    app.include_router(text_extraction.router, prefix="/api")
     return app
 
 

@@ -118,6 +118,7 @@ async def create_rewrite_draft(payload: ResumeRewriteRequest) -> ResumeRewriteRe
 
 @router.post("/{run_id}/approve", response_model=RunDetail)
 async def approve_rewrite_draft(run_id: str, payload: RewriteApprovalRequest) -> RunDetail:
+    run_id = _resolve_rewrite_run_id(run_id)
     run = run_store.get_run(run_id)
     if not run:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found.")
@@ -191,6 +192,7 @@ async def approve_rewrite_draft(run_id: str, payload: RewriteApprovalRequest) ->
 
 @router.get("/{run_id}/export.md")
 async def export_rewrite_markdown(run_id: str) -> Response:
+    run_id = _resolve_rewrite_run_id(run_id)
     draft = _approved_draft(run_id)
     return Response(
         content=draft.markdown,
@@ -201,6 +203,7 @@ async def export_rewrite_markdown(run_id: str) -> Response:
 
 @router.get("/{run_id}/export.pdf")
 async def export_rewrite_pdf(run_id: str) -> Response:
+    run_id = _resolve_rewrite_run_id(run_id)
     draft = _approved_draft(run_id)
     return Response(
         content=render_rewrite_pdf_bytes(draft),
@@ -223,6 +226,21 @@ def _draft_checkpoint(run_id: str):
             detail="Rewrite draft not found.",
         )
     return checkpoint
+
+
+def _resolve_rewrite_run_id(run_id: str) -> str:
+    if run_id != "active":
+        return run_id
+    for summary in run_store.list_runs():
+        run = run_store.get_run(summary.run_id)
+        if not run:
+            continue
+        if any(checkpoint.name == "rewrite_draft" for checkpoint in run.checkpoints):
+            return run.run_id
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Active rewrite draft not found.",
+    )
 
 
 def _draft_from_run(run_id: str) -> ResumeRewriteDraft:

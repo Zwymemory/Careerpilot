@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "CareerPilot API"
     environment: str = "local"
-    backend_cors_origins: str = "http://localhost:5173"
+    backend_cors_origins: str = "http://localhost:5173,http://localhost:5174"
 
     llm_dry_run: bool = True
     llm_provider: str = "deepseek"

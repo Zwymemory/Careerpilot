@@ -55,6 +55,7 @@ async def list_eval_reports(user_id: str = "local-user") -> list[EvalReportSumma
 
 @router.get("/{report_id}", response_model=EvalReport)
 async def get_eval_report(report_id: str) -> EvalReport:
+    report_id = _resolve_report_id(report_id)
     report = eval_report_store.get(report_id)
     if not report:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Eval report not found.")
@@ -63,6 +64,7 @@ async def get_eval_report(report_id: str) -> EvalReport:
 
 @router.get("/{report_id}/report.html")
 async def export_eval_html(report_id: str) -> Response:
+    report_id = _resolve_report_id(report_id)
     report = eval_report_store.get(report_id)
     if not report:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Eval report not found.")
@@ -71,3 +73,12 @@ async def export_eval_html(report_id: str) -> Response:
         media_type="text/html; charset=utf-8",
         headers={"Content-Disposition": f'inline; filename="{report.report_id}.html"'},
     )
+
+
+def _resolve_report_id(report_id: str) -> str:
+    if report_id != "active":
+        return report_id
+    reports = eval_report_store.list(user_id="local-user")
+    if not reports:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active eval report not found.")
+    return reports[0].report_id

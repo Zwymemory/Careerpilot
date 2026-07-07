@@ -79,7 +79,9 @@ class ApplicationRecord(BaseModel):
 
 class ApplicationCreateRequest(BaseModel):
     user_id: str = Field(default="local-user", min_length=1, max_length=80)
-    job_profile: JobProfile
+    job_profile: JobProfile | None = None
+    company: str | None = Field(default=None, max_length=200)
+    title: str | None = Field(default=None, max_length=200)
     resume_profile: ResumeProfile | None = None
     match_profile: MatchProfile | None = None
     rewrite_draft: ResumeRewriteDraft | None = None

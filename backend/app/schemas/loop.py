@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 
 
 class LoopPhase(StrEnum):
@@ -27,7 +27,11 @@ class LoopRunRequest(BaseModel):
 
 class LoopApprovalRequest(BaseModel):
     approved_by: str = Field(default="local-user", min_length=1, max_length=80)
-    notes: str | None = Field(default=None, max_length=1000)
+    notes: str | None = Field(
+        default=None,
+        max_length=1000,
+        validation_alias=AliasChoices("notes", "note"),
+    )
 
 
 class LoopResumeRequest(BaseModel):

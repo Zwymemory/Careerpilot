@@ -1,0 +1,6 @@
+{
+  "name": "CareerPilot",
+  "description": "面向国内学生实习投递场景的求职 Agent 平台，支持简历解析、岗位匹配、简历改写、面试准备、投递管理与质量评测。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
